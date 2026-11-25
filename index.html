@@ -45,7 +45,7 @@
     <main class="main-content">
       <!-- TAB 1: BERANDA -->
       <section id="view-home" class="tab-view active">
-        <div class="ledger-card hero-ledger">
+        <div class="ledger-card hero-ledger reveal-card" style="--i: 0">
           <div class="ledger-meta-row">
             <span class="mono-tag">SALDO BERSIH AKUMULASI</span>
             <span class="status-pill" id="sync-badge">Lokal</span>
@@ -79,22 +79,23 @@
         </div>
 
         <!-- WALLET STRIP -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 1">
           <h2>Dompet & Akun</h2>
+          <button type="button" class="text-link" id="btn-manage-wallets-shortcut">Kelola</button>
         </div>
-        <div class="wallet-grid" id="dash-wallet-list"></div>
+        <div class="wallet-strip reveal-card" style="--i: 2" id="dash-wallet-list"></div>
 
         <!-- RECENT TRANSACTIONS -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 3">
           <h2>Mutasi Terakhir</h2>
           <button type="button" class="text-link" id="btn-see-all-tx">Lihat Semua</button>
         </div>
-        <div class="ledger-card list-card" id="dash-recent-tx"></div>
+        <div class="ledger-card list-card reveal-card" style="--i: 4" id="dash-recent-tx"></div>
       </section>
 
       <!-- TAB 2: ANGGARAN (ENVELOPE BUDGETING) -->
       <section id="view-budget" class="tab-view">
-        <div class="section-head top-section">
+        <div class="section-head top-section reveal-card" style="--i: 0">
           <div>
             <h2>Pos Anggaran</h2>
             <p class="section-desc">Batas belanja bulanan per kategori (Envelope).</p>
@@ -102,7 +103,7 @@
           <button type="button" class="btn-outline-sm" id="btn-open-budget-modal">+ Atur Pos</button>
         </div>
 
-        <div class="ledger-card summary-strip">
+        <div class="ledger-card summary-strip reveal-card" style="--i: 1">
           <div>
             <span class="mono-tag">TOTAL TERPAKAI / PAGU</span>
             <div class="strip-value money-val" id="budget-total-summary">Rp 0 / Rp 0</div>
@@ -115,7 +116,7 @@
 
       <!-- TAB 3: LAPORAN & AUDIT BULANAN -->
       <section id="view-report" class="tab-view">
-        <div class="section-head top-section">
+        <div class="section-head top-section reveal-card" style="--i: 0">
           <div>
             <h2>Resume Bulanan</h2>
             <p class="section-desc">Audit arus kas & efisiensi pengeluaran.</p>
@@ -127,7 +128,7 @@
         </div>
 
         <!-- KPI AUDIT CARDS -->
-        <div class="audit-grid">
+        <div class="audit-grid reveal-card" style="--i: 1">
           <div class="ledger-card kpi-card">
             <span class="mono-tag">SAVINGS RATE</span>
             <div class="kpi-val" id="rep-savings-rate">0%</div>
@@ -141,7 +142,7 @@
         </div>
 
         <!-- CHART -->
-        <div class="ledger-card chart-card">
+        <div class="ledger-card chart-card reveal-card" style="--i: 2">
           <div class="card-header-inline">
             <span class="mono-tag">TREN ARUS KAS HARIAN</span>
             <span class="mono-tag" id="rep-chart-legend">Masuk vs Keluar</span>
@@ -152,49 +153,75 @@
         </div>
 
         <!-- TOP 3 POS BOCOR -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 3">
           <h2>Top 3 Pos Bocor</h2>
         </div>
-        <div class="ledger-card list-card" id="rep-top-leaks"></div>
+        <div class="ledger-card list-card reveal-card" style="--i: 4" id="rep-top-leaks"></div>
 
         <!-- FULL MONTH LEDGER & EXPORT -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 5">
           <h2>Semua Transaksi Periode Ini</h2>
           <div class="action-row-sm">
             <button type="button" class="btn-outline-sm" id="btn-export-csv">CSV</button>
             <button type="button" class="btn-outline-sm" id="btn-print-pdf">Cetak PDF</button>
           </div>
         </div>
-        <div class="ledger-card list-card" id="rep-full-tx-list"></div>
+        <div class="ledger-card list-card reveal-card" style="--i: 6" id="rep-full-tx-list"></div>
       </section>
 
       <!-- TAB 4: ALAT PINTAR & PENGATURAN -->
       <section id="view-tools" class="tab-view">
+        <!-- MANAGE WALLETS / ACCOUNTS -->
+        <div class="section-head top-section reveal-card" style="--i: 0" id="section-manage-wallets">
+          <div>
+            <h2>Dompet & Akun</h2>
+            <p class="section-desc">Tambah, ubah nama (rename), atau hapus akun kas.</p>
+          </div>
+          <button type="button" class="btn-outline-sm" id="btn-open-wallet-modal">+ Dompet</button>
+        </div>
+        <div class="ledger-card list-card reveal-card" style="--i: 1" id="tools-wallet-list"></div>
+
+        <!-- MANAGE CATEGORIES -->
+        <div class="section-head reveal-card" style="--i: 2" id="section-manage-categories">
+          <div>
+            <h2>Kategori Transaksi</h2>
+            <p class="section-desc">Sesuaikan pos pengeluaran & pemasukan Anda.</p>
+          </div>
+          <button type="button" class="btn-outline-sm" id="btn-open-category-modal">+ Kategori</button>
+        </div>
+        <div class="ledger-card settings-card reveal-card" style="--i: 3">
+          <div class="type-switch full-switch">
+            <button type="button" class="type-btn active expense" data-cat-tab="expense" id="btn-cat-tab-expense">Pengeluaran</button>
+            <button type="button" class="type-btn income" data-cat-tab="income" id="btn-cat-tab-income">Pemasukan</button>
+          </div>
+          <div class="chip-manage-grid" id="tools-category-list"></div>
+        </div>
+
         <!-- RECURRING BILLS -->
-        <div class="section-head top-section">
+        <div class="section-head reveal-card" style="--i: 4">
           <div>
             <h2>Tagihan Rutin</h2>
             <p class="section-desc">Ketuk Lunas untuk otomatis catat pengeluaran.</p>
           </div>
           <button type="button" class="btn-outline-sm" id="btn-open-bill-modal">+ Tagihan</button>
         </div>
-        <div id="tools-bill-list" class="stack-list"></div>
+        <div id="tools-bill-list" class="stack-list reveal-card" style="--i: 5"></div>
 
         <!-- WISHLIST COOLDOWN -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 6">
           <div>
             <h2>Wishlist Cooldown (7 Hari)</h2>
             <p class="section-desc">Tahan belanja impulsif dengan jeda wajib 7 hari.</p>
           </div>
           <button type="button" class="btn-outline-sm" id="btn-open-wish-modal">+ Incaran</button>
         </div>
-        <div id="tools-wish-list" class="stack-list"></div>
+        <div id="tools-wish-list" class="stack-list reveal-card" style="--i: 7"></div>
 
         <!-- CLOUD SYNC & BACKUP -->
-        <div class="section-head">
+        <div class="section-head reveal-card" style="--i: 8">
           <h2>Cloud Sync & Cadangan Data</h2>
         </div>
-        <div class="ledger-card settings-card">
+        <div class="ledger-card settings-card reveal-card" style="--i: 9">
           <label class="field-label" for="input-gas-url">URL Web App Google Apps Script</label>
           <input type="url" id="input-gas-url" class="ledger-input" placeholder="https://script.google.com/macros/s/.../exec" />
           <p class="field-help">Tempel URL deployment Web App GAS Anda. Data tetap tersimpan lokal meski tanpa internet.</p>
@@ -266,7 +293,7 @@
   </div>
 
   <!-- MODAL 1: QUICK-ENTRY TRANSACTION WITH CUSTOM NUMPAD -->
-  <div class="modal-backdrop hidden no-print" id="modal-tx">
+  <div class="modal-backdrop no-print" id="modal-tx" aria-hidden="true">
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-top">
@@ -298,11 +325,7 @@
         </div>
         <div>
           <label class="field-label-xs" for="tx-wallet">Dompet</label>
-          <select id="tx-wallet" class="ledger-select full-w">
-            <option value="QRIS / E-Wallet">QRIS / E-Wallet</option>
-            <option value="Tunai">Tunai</option>
-            <option value="Rekening Bank">Rekening Bank</option>
-          </select>
+          <select id="tx-wallet" class="ledger-select full-w"></select>
         </div>
       </div>
 
@@ -341,7 +364,7 @@
   </div>
 
   <!-- MODAL 2: ATUR POS ANGGARAN -->
-  <div class="modal-backdrop hidden no-print" id="modal-budget">
+  <div class="modal-backdrop no-print" id="modal-budget" aria-hidden="true">
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-top">
@@ -363,7 +386,7 @@
   </div>
 
   <!-- MODAL 3: TAMBAH TAGIHAN RUTIN -->
-  <div class="modal-backdrop hidden no-print" id="modal-bill">
+  <div class="modal-backdrop no-print" id="modal-bill" aria-hidden="true">
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-top">
@@ -392,11 +415,7 @@
           </div>
           <div>
             <label class="field-label" for="bill-wallet">Dompet Bayar</label>
-            <select id="bill-wallet" class="ledger-select full-w">
-              <option value="Rekening Bank">Rekening Bank</option>
-              <option value="QRIS / E-Wallet">QRIS / E-Wallet</option>
-              <option value="Tunai">Tunai</option>
-            </select>
+            <select id="bill-wallet" class="ledger-select full-w"></select>
           </div>
         </div>
         <button type="button" class="btn-primary full-w" id="btn-save-bill">Simpan Tagihan</button>
@@ -405,7 +424,7 @@
   </div>
 
   <!-- MODAL 4: TAMBAH WISHLIST COOLDOWN -->
-  <div class="modal-backdrop hidden no-print" id="modal-wish">
+  <div class="modal-backdrop no-print" id="modal-wish" aria-hidden="true">
     <div class="bottom-sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-top">
@@ -430,7 +449,51 @@
     </div>
   </div>
 
+  <!-- MODAL 5: TAMBAH / RENAME DOMPET & AKUN -->
+  <div class="modal-backdrop no-print" id="modal-wallet" aria-hidden="true">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-top">
+        <h3 id="modal-wallet-title">Tambah Dompet / Akun</h3>
+        <button type="button" class="close-sheet-btn" data-close-modal="modal-wallet">✕</button>
+      </div>
+      <div class="stack-form">
+        <div>
+          <label class="field-label" for="wallet-name-input">Nama Dompet / Rekening / E-Wallet</label>
+          <input type="text" id="wallet-name-input" class="ledger-input" placeholder="Contoh: BCA, SeaBank, GoPay, Dompet Saku" maxlength="32" />
+          <p class="field-help" id="wallet-modal-hint">Jika mengubah nama dompet lama, seluruh riwayat transaksi terkait akan ikut diperbarui otomatis.</p>
+        </div>
+        <button type="button" class="btn-primary full-w" id="btn-save-wallet">Simpan Dompet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: TAMBAH / RENAME KATEGORI -->
+  <div class="modal-backdrop no-print" id="modal-category" aria-hidden="true">
+    <div class="bottom-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-top">
+        <h3 id="modal-category-title">Tambah Kategori</h3>
+        <button type="button" class="close-sheet-btn" data-close-modal="modal-category">✕</button>
+      </div>
+      <div class="stack-form">
+        <div>
+          <label class="field-label" for="category-type-select">Jenis Arus Kas</label>
+          <select id="category-type-select" class="ledger-select full-w">
+            <option value="expense">Pengeluaran</option>
+            <option value="income">Pemasukan</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label" for="category-name-input">Nama Kategori</label>
+          <input type="text" id="category-name-input" class="ledger-input" placeholder="Contoh: Kopi & Ngemil, Cicilan, Freelance" maxlength="32" />
+        </div>
+        <button type="button" class="btn-primary full-w" id="btn-save-category">Simpan Kategori</button>
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION -->
-  <div id="toast-box" class="toast hidden no-print" role="status"></div>
+  <div id="toast-box" class="toast no-print" role="status"></div>
 </body>
 </html>
