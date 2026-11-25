@@ -1,6 +1,5 @@
 /* =========================================================
-   KASAKU — TACTILE SWISS LEDGER DESIGN SYSTEM
-   Warm Paper & Charcoal Ink | Zero-Cliché Mobile Architecture
+   KASAKU v2 — TACTILE SWISS LEDGER + MOTION SYSTEM
    ========================================================= */
 
 :root {
@@ -24,6 +23,8 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-tactile: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 [data-theme="dark"] {
@@ -57,7 +58,7 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.45;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.25s var(--ease-tactile), color 0.25s var(--ease-tactile);
 }
 
 .app-shell {
@@ -66,7 +67,7 @@ body {
   margin: 0 auto;
   background-color: var(--bg-canvas);
   position: relative;
-  padding-bottom: 88px;
+  padding-bottom: 92px;
 }
 
 @media (min-width: 520px) {
@@ -84,7 +85,7 @@ body {
 body.privacy-active .money-val {
   filter: blur(6px);
   user-select: none;
-  transition: filter 0.15s ease;
+  transition: filter 0.2s var(--ease-tactile);
 }
 
 /* TOP HEADER */
@@ -114,6 +115,11 @@ body.privacy-active .money-val {
   border: 1.5px solid var(--text-primary);
   border-radius: 4px;
   letter-spacing: 0.04em;
+  transition: transform 0.2s var(--ease-spring);
+}
+
+.brand-block:active .brand-mark {
+  transform: scale(0.92);
 }
 
 .brand-title {
@@ -146,21 +152,23 @@ body.privacy-active .money-val {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: transform 0.16s var(--ease-spring), background-color 0.16s ease, border-color 0.16s ease;
 }
 
 .icon-btn:active {
-  transform: scale(0.96);
+  transform: scale(0.91);
+  background: var(--bg-subtle);
 }
 
 .icon-btn.spinning svg {
-  animation: spin 0.9s linear infinite;
+  animation: spin 0.85s linear infinite;
 }
 
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* MAIN LAYOUT & CARDS */
+/* MAIN LAYOUT & STAGGERED MOTION */
 .main-content {
   padding: 16px;
 }
@@ -171,12 +179,22 @@ body.privacy-active .money-val {
 
 .tab-view.active {
   display: block;
-  animation: fadeIn 0.18s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+.tab-view.active .reveal-card {
+  animation: cardSlideUp 0.36s var(--ease-spring) both;
+  animation-delay: calc(var(--i, 0) * 42ms);
+}
+
+@keyframes cardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .ledger-card {
@@ -184,6 +202,7 @@ body.privacy-active .money-val {
   border: 1px solid var(--border-ink);
   border-radius: var(--radius-md);
   padding: 16px;
+  transition: border-color 0.2s ease, transform 0.2s var(--ease-spring);
 }
 
 .hero-ledger {
@@ -213,6 +232,7 @@ body.privacy-active .money-val {
   border-radius: 99px;
   border: 1px solid var(--border-ink);
   color: var(--text-secondary);
+  transition: all 0.25s ease;
 }
 
 .status-pill.synced {
@@ -340,18 +360,34 @@ body.privacy-active .money-val {
   cursor: pointer;
 }
 
-/* WALLET GRID */
-.wallet-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+/* FLEXIBLE SWIPEABLE WALLET STRIP */
+.wallet-strip {
+  display: flex;
   gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+}
+
+.wallet-strip::-webkit-scrollbar {
+  display: none;
 }
 
 .wallet-tile {
+  flex: 1 0 132px;
+  scroll-snap-align: start;
   background: var(--bg-surface);
   border: 1px solid var(--border-ink);
   border-radius: var(--radius-sm);
-  padding: 10px;
+  padding: 10px 11px;
+  transition: transform 0.18s var(--ease-spring), border-color 0.18s ease;
+}
+
+.wallet-tile:active {
+  transform: scale(0.97);
+  border-color: var(--text-primary);
 }
 
 .wallet-name {
@@ -371,7 +407,7 @@ body.privacy-active .money-val {
   font-weight: 700;
 }
 
-/* TRANSACTION LIST */
+/* TRANSACTION & MANAGEMENT LISTS */
 .list-card {
   padding: 0;
   overflow: hidden;
@@ -384,10 +420,20 @@ body.privacy-active .money-val {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border-ink);
   gap: 10px;
+  transition: background-color 0.15s ease;
 }
 
 .tx-row:last-child {
   border-bottom: none;
+}
+
+.tx-row.flash-new {
+  animation: rowHighlight 0.9s var(--ease-spring);
+}
+
+@keyframes rowHighlight {
+  0% { background-color: var(--accent-income-bg); }
+  100% { background-color: transparent; }
 }
 
 .tx-left {
@@ -437,10 +483,15 @@ body.privacy-active .money-val {
   background: none;
   border: none;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 10.5px;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 1px 3px;
+  padding: 2px 4px;
+  transition: color 0.15s ease, transform 0.12s ease;
+}
+
+.mini-action-btn:active {
+  transform: scale(0.92);
 }
 
 .mini-action-btn.del:hover {
@@ -452,6 +503,60 @@ body.privacy-active .money-val {
   text-align: center;
   color: var(--text-secondary);
   font-size: 12.5px;
+}
+
+/* CATEGORY MANAGEMENT CHIPS */
+.full-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.chip-manage-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-ink);
+  border-radius: var(--radius-sm);
+  padding: 6px 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: transform 0.15s var(--ease-spring), border-color 0.15s ease;
+}
+
+.cat-pill:hover {
+  border-color: var(--text-primary);
+}
+
+.cat-pill-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-left: 1px solid var(--border-ink);
+  padding-left: 6px;
+  margin-left: 2px;
+}
+
+.pill-icon-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.pill-icon-btn.del:hover {
+  color: var(--accent-expense);
 }
 
 /* ENVELOPE BUDGETS */
@@ -513,7 +618,7 @@ body.privacy-active .money-val {
 .progress-fill {
   height: 100%;
   background-color: var(--accent-income);
-  transition: width 0.25s ease;
+  transition: width 0.55s var(--ease-spring), background-color 0.3s ease;
 }
 
 .progress-fill.warn {
@@ -640,6 +745,13 @@ body.privacy-active .money-val {
   font-family: var(--font-sans);
   font-size: 13.5px;
   width: 100%;
+  transition: border-color 0.15s ease;
+}
+
+.ledger-input:focus,
+.ledger-select:focus {
+  outline: none;
+  border-color: var(--text-primary);
 }
 
 .ledger-input.compact,
@@ -663,6 +775,13 @@ body.privacy-active .money-val {
   align-items: center;
   justify-content: center;
   gap: 6px;
+  transition: transform 0.15s var(--ease-spring), opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.btn-primary:active,
+.btn-secondary:active,
+.btn-outline-sm:active {
+  transform: scale(0.96);
 }
 
 .btn-primary {
@@ -741,10 +860,19 @@ body.privacy-active .money-val {
   font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
+  transition: color 0.18s ease, transform 0.16s var(--ease-spring);
+}
+
+.nav-item:active {
+  transform: scale(0.92);
 }
 
 .nav-item.active {
   color: var(--text-primary);
+}
+
+.nav-item.active svg {
+  transform: translateY(-1px);
 }
 
 .nav-fab {
@@ -759,13 +887,14 @@ body.privacy-active .money-val {
   justify-content: center;
   margin: 0 6px;
   cursor: pointer;
+  transition: transform 0.22s var(--ease-spring);
 }
 
 .nav-fab:active {
-  transform: scale(0.94);
+  transform: scale(0.9) rotate(90deg);
 }
 
-/* BOTTOM SHEET & CUSTOM NUMPAD */
+/* SPRING BOTTOM SHEET MODAL */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -774,6 +903,14 @@ body.privacy-active .money-val {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s var(--ease-tactile);
+}
+
+.modal-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .bottom-sheet {
@@ -785,6 +922,12 @@ body.privacy-active .money-val {
   padding: 10px 16px calc(16px + env(safe-area-inset-bottom));
   max-height: 92vh;
   overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.32s var(--ease-spring);
+}
+
+.modal-backdrop.open .bottom-sheet {
+  transform: translateY(0);
 }
 
 .sheet-handle {
@@ -810,6 +953,11 @@ body.privacy-active .money-val {
   background: var(--bg-canvas);
   color: var(--text-primary);
   cursor: pointer;
+  transition: transform 0.14s var(--ease-spring);
+}
+
+.close-sheet-btn:active {
+  transform: scale(0.9);
 }
 
 .type-switch {
@@ -829,6 +977,7 @@ body.privacy-active .money-val {
   border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: background-color 0.2s var(--ease-tactile), color 0.2s ease;
 }
 
 .type-btn.active.expense {
@@ -863,6 +1012,12 @@ body.privacy-active .money-val {
   font-variant-numeric: tabular-nums;
   font-size: 26px;
   font-weight: 700;
+  display: inline-block;
+  transition: transform 0.12s var(--ease-spring);
+}
+
+.numpad-value.pop {
+  transform: scale(1.04);
 }
 
 .quick-chips {
@@ -882,6 +1037,12 @@ body.privacy-active .money-val {
   padding: 6px 4px;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: transform 0.12s var(--ease-spring), background-color 0.12s ease;
+}
+
+.chip-add:active {
+  transform: scale(0.93);
+  background: var(--bg-subtle);
 }
 
 .form-compact-grid {
@@ -914,9 +1075,11 @@ body.privacy-active .money-val {
   font-size: 17px;
   font-weight: 700;
   cursor: pointer;
+  transition: transform 0.1s var(--ease-spring), background-color 0.1s ease;
 }
 
 .pad-key:active {
+  transform: scale(0.92);
   background-color: var(--bg-subtle);
 }
 
@@ -935,12 +1098,14 @@ body.privacy-active .money-val {
   letter-spacing: 0.04em;
 }
 
-/* TOAST */
+/* TOAST WITH SLIDE-DOWN MOTION */
 .toast {
   position: fixed;
   top: 66px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -14px);
+  opacity: 0;
+  pointer-events: none;
   background-color: var(--text-primary);
   color: var(--bg-surface);
   font-size: 12.5px;
@@ -949,6 +1114,19 @@ body.privacy-active .money-val {
   border-radius: 99px;
   z-index: 80;
   white-space: nowrap;
+  transition: opacity 0.22s var(--ease-tactile), transform 0.26s var(--ease-spring);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* PRINT STYLESHEET (RECEIPT PDF) */
