@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kasaku-offline-v1';
+const CACHE_NAME = 'kasaku-offline-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -26,17 +26,11 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-
-  // Jangan cache request API Google Apps Script agar sinkronisasi selalu real-time
-  if (event.request.url.includes('script.google.com')) {
-    return;
-  }
+  if (event.request.url.includes('script.google.com')) return;
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+      if (cachedResponse) return cachedResponse;
       return fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
