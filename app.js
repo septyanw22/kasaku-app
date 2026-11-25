@@ -1,10 +1,11 @@
 /**
- * KASAKU — Core Application Logic (Offline-First + Cloud Sync)
+ * KASAKU v2 — Core Application Logic
+ * Flexible Wallets & Categories (Add / Cascade Rename / Delete) + Tactile Motion
  */
 
 const STORAGE_KEY = 'kasaku_ledger_v1';
 
-const EXPENSE_CATEGORIES = [
+const DEFAULT_EXPENSE_CATEGORIES = [
   'Makan & Kopi',
   'Transportasi',
   'Tagihan',
@@ -15,7 +16,7 @@ const EXPENSE_CATEGORIES = [
   'Lainnya'
 ];
 
-const INCOME_CATEGORIES = [
+const DEFAULT_INCOME_CATEGORIES = [
   'Gaji',
   'Tunjangan / Bonus',
   'Hasil Usaha',
@@ -23,7 +24,7 @@ const INCOME_CATEGORIES = [
   'Lainnya'
 ];
 
-const WALLETS = ['QRIS / E-Wallet', 'Tunai', 'Rekening Bank'];
+const DEFAULT_WALLETS = ['QRIS / E-Wallet', 'Tunai', 'Rekening Bank'];
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -32,9 +33,14 @@ const MONTH_NAMES = [
 
 let appState = {
   transactions: [],
-  budgets: [], // { category, limit, updatedAt }
-  bills: [],   // { id, name, amount, category, wallet, dueDay, paidPeriod, updatedAt }
-  wishlist: [], // { id, name, price, note, createdAt, unlockAt, purchased, updatedAt }
+  budgets: [],
+  bills: [],
+  wishlist: [],
+  categories: {
+    expense: [...DEFAULT_EXPENSE_CATEGORIES],
+    income: [...DEFAULT_INCOME_CATEGORIES]
+  },
+  wallets: [...DEFAULT_WALLETS],
   settings: {
     gasUrl: '',
     theme: 'light',
@@ -46,6 +52,11 @@ let appState = {
 let currentTxType = 'expense';
 let currentNumpadRaw = '0';
 let editingTxId = null;
+let editingWalletOldName = null;
+let editingCategoryState = null; // { type, oldName }
+let activeManageCatTab = 'expense';
+let lastSavedTxId = null;
+let prevNetBalance = 0;
 let cashflowChartInstance = null;
 
 /* =========================================================
@@ -57,7 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   applyPrivacy(appState.settings.privacyMode);
   initSelectors();
   bindEvents();
-  renderAll();
+  renderAll(true);
   registerServiceWorker();
 });
 
@@ -66,11 +77,34 @@ function loadState() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      const txs = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+
+      const expCats = Array.isArray(parsed.categories?.expense) && parsed.categories.expense.length
+        ? parsed.categories.expense
+        : [...DEFAULT_EXPENSE_CATEGORIES];
+
+      const incCats = Array.isArray(parsed.categories?.income) && parsed.categories.income.length
+        ? parsed.categories.income
+        : [...DEFAULT_INCOME_CATEGORIES];
+
+      const wallets = Array.isArray(parsed.wallets) && parsed.wallets.length
+        ? parsed.wallets
+        : [...DEFAULT_WALLETS];
+
+      // Pastikan kategori/dompet dari transaksi lama tidak hilang
+      txs.forEach((t) => {
+        if (t.wallet && !wallets.includes(t.wallet)) wallets.push(t.wallet);
+        if (t.type === 'expense' && t.category && !expCats.includes(t.category)) expCats.push(t.category);
+        if (t.type === 'income' && t.category && !incCats.includes(t.category)) incCats.push(t.category);
+      });
+
       appState = {
-        transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+        transactions: txs,
         budgets: Array.isArray(parsed.budgets) ? parsed.budgets : [],
         bills: Array.isArray(parsed.bills) ? parsed.bills : [],
         wishlist: Array.isArray(parsed.wishlist) ? parsed.wishlist : [],
+        categories: { expense: expCats, income: incCats },
+        wallets,
         settings: {
           gasUrl: parsed.settings?.gasUrl || '',
           theme: parsed.settings?.theme || 'light',
@@ -86,19 +120,39 @@ function loadState() {
 
 function saveState(triggerAutoSync = true) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-  renderAll();
+  refreshDynamicSelects();
+  renderAll(false);
   if (triggerAutoSync && appState.settings.gasUrl && navigator.onLine) {
     pushSyncToCloud(true);
   }
 }
 
 /* =========================================================
-   HELPERS (FORMATTING, DATES, SECURITY)
+   HELPERS & MOTION UTILITIES
    ========================================================= */
 function formatIDR(num) {
   const value = Math.round(Number(num) || 0);
   const prefix = value < 0 ? '-Rp ' : 'Rp ';
   return prefix + Math.abs(value).toLocaleString('id-ID');
+}
+
+function animateCurrencyRoll(el, startVal, endVal, suffixHTML = '') {
+  if (!el) return;
+  if (startVal === endVal || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.innerHTML = formatIDR(endVal) + suffixHTML;
+    return;
+  }
+  const duration = 380;
+  const startTime = performance.now();
+
+  function step(now) {
+    const progress = Math.min(1, (now - startTime) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = Math.round(startVal + (endVal - startVal) * eased);
+    el.innerHTML = formatIDR(current) + suffixHTML;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
 function getTodayISO() {
@@ -129,25 +183,45 @@ function escapeHTML(str) {
 function showToast(msg) {
   const el = document.getElementById('toast-box');
   el.textContent = msg;
-  el.classList.remove('hidden');
+  el.classList.add('show');
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => el.classList.add('hidden'), 2600);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+function openModal(modalId) {
+  const el = document.getElementById(modalId);
+  if (!el) return;
+  el.classList.add('open');
+  el.setAttribute('aria-hidden', 'false');
+}
+
+function closeModal(modalId) {
+  const el = document.getElementById(modalId);
+  if (!el) return;
+  el.classList.remove('open');
+  el.setAttribute('aria-hidden', 'true');
 }
 
 /* =========================================================
    SELECTORS & EVENT BINDINGS
    ========================================================= */
-function initSelectors() {
-  // Budget & Bill Category dropdowns
-  const budgetCatSelect = document.getElementById('budget-cat-select');
-  const billCatSelect = document.getElementById('bill-category');
-  const catOptions = EXPENSE_CATEGORIES.map(
-    (c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`
-  ).join('');
-  budgetCatSelect.innerHTML = catOptions;
-  billCatSelect.innerHTML = catOptions;
+function refreshDynamicSelects() {
+  const expOptions = appState.categories.expense
+    .map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+    .join('');
+  document.getElementById('budget-cat-select').innerHTML = expOptions;
+  document.getElementById('bill-category').innerHTML = expOptions;
 
-  // Report Month & Year selectors
+  const walletOptions = appState.wallets
+    .map((w) => `<option value="${escapeHTML(w)}">${escapeHTML(w)}</option>`)
+    .join('');
+  document.getElementById('tx-wallet').innerHTML = walletOptions;
+  document.getElementById('bill-wallet').innerHTML = walletOptions;
+}
+
+function initSelectors() {
+  refreshDynamicSelects();
+
   const now = new Date();
   const monthSel = document.getElementById('report-month-select');
   monthSel.innerHTML = MONTH_NAMES.map(
@@ -168,14 +242,14 @@ function initSelectors() {
 function bindEvents() {
   // Bottom Tab Navigation
   document.querySelectorAll('.nav-item').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.dataset.tab;
-      switchTab(targetId);
-    });
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
-  document.getElementById('btn-see-all-tx').addEventListener('click', () => {
-    switchTab('view-report');
+  document.getElementById('btn-see-all-tx').addEventListener('click', () => switchTab('view-report'));
+
+  document.getElementById('btn-manage-wallets-shortcut').addEventListener('click', () => {
+    switchTab('view-tools');
+    document.getElementById('section-manage-wallets').scrollIntoView({ behavior: 'smooth' });
   });
 
   // Theme & Privacy
@@ -193,27 +267,19 @@ function bindEvents() {
   });
 
   // Quick Sync Header Button
-  document.getElementById('btn-sync-quick').addEventListener('click', () => {
-    syncBidirectional();
-  });
+  document.getElementById('btn-sync-quick').addEventListener('click', syncBidirectional);
 
   // Open Transaction Modal
-  document.getElementById('btn-open-tx-modal').addEventListener('click', () => {
-    openTxModal();
-  });
+  document.getElementById('btn-open-tx-modal').addEventListener('click', () => openTxModal());
 
   // Switch Income / Expense inside Tx Modal
-  document.querySelectorAll('.type-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      setTxType(btn.dataset.txType);
-    });
+  document.querySelectorAll('.type-btn[data-tx-type]').forEach((btn) => {
+    btn.addEventListener('click', () => setTxType(btn.dataset.txType));
   });
 
   // Custom Numpad Keys
   document.querySelectorAll('.pad-key[data-key]').forEach((keyBtn) => {
-    keyBtn.addEventListener('click', () => {
-      handleNumpadKey(keyBtn.dataset.key);
-    });
+    keyBtn.addEventListener('click', () => handleNumpadKey(keyBtn.dataset.key));
   });
 
   // Quick Chip Adders
@@ -222,24 +288,46 @@ function bindEvents() {
       const add = Number(chip.dataset.addVal) || 0;
       const current = Number(currentNumpadRaw) || 0;
       currentNumpadRaw = String(current + add);
-      updateNumpadDisplay();
+      updateNumpadDisplay(true);
     });
   });
 
   // Save Transaction
   document.getElementById('btn-save-tx').addEventListener('click', saveTransactionFromModal);
 
-  // Close Modals
+  // Close Modals (Button & Backdrop Tap)
   document.querySelectorAll('[data-close-modal]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.getElementById(btn.dataset.closeModal).classList.add('hidden');
+    btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
+  });
+  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal(backdrop.id);
     });
   });
 
+  // Wallet Management Modal
+  document.getElementById('btn-open-wallet-modal').addEventListener('click', () => openWalletModal());
+  document.getElementById('btn-save-wallet').addEventListener('click', saveWalletForm);
+
+  // Category Management Tabs & Modal
+  document.querySelectorAll('[data-cat-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeManageCatTab = btn.dataset.catTab;
+      document.getElementById('btn-cat-tab-expense').classList.toggle('active', activeManageCatTab === 'expense');
+      document.getElementById('btn-cat-tab-income').classList.toggle('active', activeManageCatTab === 'income');
+      renderCategoryManager();
+    });
+  });
+  document.getElementById('btn-open-category-modal').addEventListener('click', () =>
+    openCategoryModal(activeManageCatTab)
+  );
+  document.getElementById('btn-save-category').addEventListener('click', saveCategoryForm);
+
   // Budget Modal
   document.getElementById('btn-open-budget-modal').addEventListener('click', () => {
+    refreshDynamicSelects();
     document.getElementById('budget-limit-input').value = '';
-    document.getElementById('modal-budget').classList.remove('hidden');
+    openModal('modal-budget');
   });
   document.getElementById('btn-save-budget').addEventListener('click', saveBudgetEnvelope);
 
@@ -251,9 +339,10 @@ function bindEvents() {
 
   // Recurring Bills Modal
   document.getElementById('btn-open-bill-modal').addEventListener('click', () => {
+    refreshDynamicSelects();
     document.getElementById('bill-name').value = '';
     document.getElementById('bill-amount').value = '';
-    document.getElementById('modal-bill').classList.remove('hidden');
+    openModal('modal-bill');
   });
   document.getElementById('btn-save-bill').addEventListener('click', saveRecurringBill);
 
@@ -262,7 +351,7 @@ function bindEvents() {
     document.getElementById('wish-name').value = '';
     document.getElementById('wish-price').value = '';
     document.getElementById('wish-note').value = '';
-    document.getElementById('modal-wish').classList.remove('hidden');
+    openModal('modal-wish');
   });
   document.getElementById('btn-save-wish').addEventListener('click', saveWishlistItem);
 
@@ -309,15 +398,182 @@ function applyPrivacy(enabled) {
 }
 
 /* =========================================================
+   FLEXIBLE WALLET & CATEGORY CRUD (WITH CASCADE RENAME)
+   ========================================================= */
+function openWalletModal(oldName = null) {
+  editingWalletOldName = oldName;
+  const titleEl = document.getElementById('modal-wallet-title');
+  const inputEl = document.getElementById('wallet-name-input');
+  const btnEl = document.getElementById('btn-save-wallet');
+
+  if (oldName) {
+    titleEl.textContent = 'Ubah Nama Dompet / Akun';
+    inputEl.value = oldName;
+    btnEl.textContent = 'Perbarui Nama Dompet';
+  } else {
+    titleEl.textContent = 'Tambah Dompet / Akun';
+    inputEl.value = '';
+    btnEl.textContent = 'Simpan Dompet';
+  }
+  openModal('modal-wallet');
+  setTimeout(() => inputEl.focus(), 180);
+}
+
+function saveWalletForm() {
+  const newName = document.getElementById('wallet-name-input').value.trim();
+  if (!newName) {
+    showToast('Nama dompet tidak boleh kosong.');
+    return;
+  }
+
+  const duplicate = appState.wallets.some(
+    (w) => w.toLowerCase() === newName.toLowerCase() && w !== editingWalletOldName
+  );
+  if (duplicate) {
+    showToast('Nama dompet tersebut sudah ada.');
+    return;
+  }
+
+  if (editingWalletOldName) {
+    const idx = appState.wallets.indexOf(editingWalletOldName);
+    if (idx !== -1) {
+      appState.wallets[idx] = newName;
+      // Cascade rename ke seluruh transaksi & tagihan
+      appState.transactions.forEach((t) => {
+        if (t.wallet === editingWalletOldName) t.wallet = newName;
+      });
+      appState.bills.forEach((b) => {
+        if (b.wallet === editingWalletOldName) b.wallet = newName;
+      });
+    }
+    showToast(`Dompet diubah menjadi "${newName}".`);
+  } else {
+    appState.wallets.push(newName);
+    showToast(`Dompet "${newName}" ditambahkan.`);
+  }
+
+  closeModal('modal-wallet');
+  saveState(true);
+}
+
+function deleteWallet(name) {
+  if (appState.wallets.length <= 1) {
+    showToast('Minimal harus menyisakan 1 dompet aktif.');
+    return;
+  }
+
+  const txCount = appState.transactions.filter((t) => t.wallet === name).length;
+  const msg = txCount > 0
+    ? `Dompet "${name}" memiliki ${txCount} transaksi. Hapus dari daftar dompet aktif? (Riwayat transaksi lama tetap aman).`
+    : `Hapus dompet "${name}"?`;
+
+  if (!confirm(msg)) return;
+  appState.wallets = appState.wallets.filter((w) => w !== name);
+  showToast(`Dompet "${name}" dihapus.`);
+  saveState(true);
+}
+
+function openCategoryModal(type = 'expense', oldName = null) {
+  editingCategoryState = oldName ? { type, oldName } : null;
+  const titleEl = document.getElementById('modal-category-title');
+  const typeSel = document.getElementById('category-type-select');
+  const inputEl = document.getElementById('category-name-input');
+  const btnEl = document.getElementById('btn-save-category');
+
+  typeSel.value = type;
+  typeSel.disabled = Boolean(oldName);
+
+  if (oldName) {
+    titleEl.textContent = 'Ubah Nama Kategori';
+    inputEl.value = oldName;
+    btnEl.textContent = 'Perbarui Kategori';
+  } else {
+    titleEl.textContent = 'Tambah Kategori Baru';
+    inputEl.value = '';
+    btnEl.textContent = 'Simpan Kategori';
+  }
+  openModal('modal-category');
+  setTimeout(() => inputEl.focus(), 180);
+}
+
+function saveCategoryForm() {
+  const type = document.getElementById('category-type-select').value;
+  const newName = document.getElementById('category-name-input').value.trim();
+
+  if (!newName) {
+    showToast('Nama kategori tidak boleh kosong.');
+    return;
+  }
+
+  const list = appState.categories[type] || [];
+  const oldName = editingCategoryState ? editingCategoryState.oldName : null;
+
+  const duplicate = list.some(
+    (c) => c.toLowerCase() === newName.toLowerCase() && c !== oldName
+  );
+  if (duplicate) {
+    showToast('Kategori tersebut sudah terdaftar.');
+    return;
+  }
+
+  if (oldName) {
+    const idx = list.indexOf(oldName);
+    if (idx !== -1) {
+      list[idx] = newName;
+      appState.transactions.forEach((t) => {
+        if (t.type === type && t.category === oldName) t.category = newName;
+      });
+      if (type === 'expense') {
+        appState.budgets.forEach((b) => {
+          if (b.category === oldName) b.category = newName;
+        });
+        appState.bills.forEach((b) => {
+          if (b.category === oldName) b.category = newName;
+        });
+      }
+    }
+    showToast(`Kategori diubah menjadi "${newName}".`);
+  } else {
+    list.push(newName);
+    showToast(`Kategori "${newName}" ditambahkan.`);
+  }
+
+  activeManageCatTab = type;
+  document.getElementById('btn-cat-tab-expense').classList.toggle('active', type === 'expense');
+  document.getElementById('btn-cat-tab-income').classList.toggle('active', type === 'income');
+
+  closeModal('modal-category');
+  saveState(true);
+}
+
+function deleteCategory(type, name) {
+  const list = appState.categories[type] || [];
+  if (list.length <= 1) {
+    showToast('Minimal harus menyisakan 1 kategori.');
+    return;
+  }
+
+  if (!confirm(`Hapus kategori "${name}"?`)) return;
+  appState.categories[type] = list.filter((c) => c !== name);
+  showToast(`Kategori "${name}" dihapus.`);
+  saveState(true);
+}
+
+/* =========================================================
    TRANSACTION MODAL & CUSTOM NUMPAD
    ========================================================= */
 function openTxModal(txToEdit = null) {
+  refreshDynamicSelects();
+
   if (txToEdit) {
     editingTxId = txToEdit.id;
-    setTxType(txToEdit.type);
+    setTxType(txToEdit.type, txToEdit.category);
     currentNumpadRaw = String(Math.round(txToEdit.amount));
-    document.getElementById('tx-category').value = txToEdit.category;
-    document.getElementById('tx-wallet').value = txToEdit.wallet;
+    const walletSel = document.getElementById('tx-wallet');
+    if (![...walletSel.options].some((o) => o.value === txToEdit.wallet)) {
+      walletSel.insertAdjacentHTML('beforeend', `<option value="${escapeHTML(txToEdit.wallet)}">${escapeHTML(txToEdit.wallet)}</option>`);
+    }
+    walletSel.value = txToEdit.wallet;
     document.getElementById('tx-date').value = txToEdit.date;
     document.getElementById('tx-note').value = txToEdit.note || '';
     document.getElementById('btn-save-tx').textContent = 'PERBARUI TRANSAKSI';
@@ -329,19 +585,23 @@ function openTxModal(txToEdit = null) {
     document.getElementById('tx-note').value = '';
     document.getElementById('btn-save-tx').textContent = 'SIMPAN TRANSAKSI';
   }
-  updateNumpadDisplay();
-  document.getElementById('modal-tx').classList.remove('hidden');
+  updateNumpadDisplay(false);
+  openModal('modal-tx');
 }
 
-function setTxType(type) {
+function setTxType(type, preserveCat = null) {
   currentTxType = type;
   document.getElementById('btn-type-expense').classList.toggle('active', type === 'expense');
   document.getElementById('btn-type-income').classList.toggle('active', type === 'income');
 
-  const list = type === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES;
-  document.getElementById('tx-category').innerHTML = list
+  const list = [...(appState.categories[type] || [])];
+  if (preserveCat && !list.includes(preserveCat)) list.push(preserveCat);
+
+  const catSel = document.getElementById('tx-category');
+  catSel.innerHTML = list
     .map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
     .join('');
+  if (preserveCat) catSel.value = preserveCat;
 }
 
 function handleNumpadKey(key) {
@@ -360,12 +620,18 @@ function handleNumpadKey(key) {
       currentNumpadRaw += key;
     }
   }
-  updateNumpadDisplay();
+  updateNumpadDisplay(true);
 }
 
-function updateNumpadDisplay() {
+function updateNumpadDisplay(pulse = false) {
   const num = Number(currentNumpadRaw) || 0;
-  document.getElementById('numpad-display').textContent = num.toLocaleString('id-ID');
+  const el = document.getElementById('numpad-display');
+  el.textContent = num.toLocaleString('id-ID');
+  if (pulse) {
+    el.classList.remove('pop');
+    void el.offsetWidth;
+    el.classList.add('pop');
+  }
 }
 
 function saveTransactionFromModal() {
@@ -394,11 +660,13 @@ function saveTransactionFromModal() {
         note,
         updatedAt: nowISO
       };
+      lastSavedTxId = editingTxId;
     }
     showToast('Transaksi diperbarui.');
   } else {
+    const newId = uid('tx');
     appState.transactions.push({
-      id: uid('tx'),
+      id: newId,
       type: currentTxType,
       amount,
       category,
@@ -407,10 +675,11 @@ function saveTransactionFromModal() {
       note,
       updatedAt: nowISO
     });
+    lastSavedTxId = newId;
     showToast('Transaksi tercatat.');
   }
 
-  document.getElementById('modal-tx').classList.add('hidden');
+  closeModal('modal-tx');
   saveState(true);
 }
 
@@ -424,18 +693,18 @@ function deleteTransaction(id) {
 /* =========================================================
    RENDERING ENGINE (DASHBOARD, BUDGETS, REPORTS, TOOLS)
    ========================================================= */
-function renderAll() {
+function renderAll(isInitial = false) {
   const now = new Date();
   document.getElementById('header-period-label').textContent =
     `Buku Kas • ${MONTH_NAMES[now.getMonth()].slice(0, 3)} ${now.getFullYear()}`;
 
-  renderDashboard();
+  renderDashboard(isInitial);
   renderBudgetsView();
   renderReportView();
   renderToolsView();
 }
 
-function renderDashboard() {
+function renderDashboard(isInitial = false) {
   const now = new Date();
   const ym = getCurrentPeriodYM();
 
@@ -443,7 +712,10 @@ function renderDashboard() {
   let totalExpenseAll = 0;
   let monthIncome = 0;
   let monthExpense = 0;
-  const walletBalances = { 'QRIS / E-Wallet': 0, 'Tunai': 0, 'Rekening Bank': 0 };
+  const walletBalances = {};
+  appState.wallets.forEach((w) => {
+    walletBalances[w] = 0;
+  });
 
   appState.transactions.forEach((tx) => {
     const amt = Number(tx.amount) || 0;
@@ -461,7 +733,10 @@ function renderDashboard() {
   });
 
   const netBalance = totalIncomeAll - totalExpenseAll;
-  document.getElementById('dash-net-balance').textContent = formatIDR(netBalance);
+  const netEl = document.getElementById('dash-net-balance');
+  animateCurrencyRoll(netEl, isInitial ? 0 : prevNetBalance, netBalance);
+  prevNetBalance = netBalance;
+
   document.getElementById('dash-month-in').textContent = formatIDR(monthIncome);
   document.getElementById('dash-month-out').textContent = formatIDR(monthExpense);
 
@@ -486,18 +761,22 @@ function renderDashboard() {
   document.getElementById('dash-daily-safe').innerHTML = `${formatIDR(dailySafe)}<span class="unit">/hari</span>`;
   document.getElementById('dash-safe-caption').textContent = hintText;
 
-  // Render Wallet Strip
-  document.getElementById('dash-wallet-list').innerHTML = WALLETS.map(
-    (w) => `
-      <div class="wallet-tile">
-        <span class="wallet-name">${escapeHTML(w)}</span>
-        <span class="wallet-bal money-val">${formatIDR(walletBalances[w])}</span>
-      </div>
-    `
-  ).join('');
+  // Render Flexible Wallet Strip
+  document.getElementById('dash-wallet-list').innerHTML = appState.wallets
+    .map(
+      (w) => `
+        <div class="wallet-tile">
+          <span class="wallet-name">${escapeHTML(w)}</span>
+          <span class="wallet-bal money-val">${formatIDR(walletBalances[w] || 0)}</span>
+        </div>
+      `
+    )
+    .join('');
 
   // Render 5 Recent Transactions
-  const sorted = [...appState.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+  const sorted = [...appState.transactions].sort(
+    (a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt)
+  );
   const recent = sorted.slice(0, 5);
   const recentContainer = document.getElementById('dash-recent-tx');
 
@@ -506,6 +785,7 @@ function renderDashboard() {
   } else {
     recentContainer.innerHTML = recent.map((tx) => buildTxRowHTML(tx)).join('');
     bindTxRowActions(recentContainer);
+    lastSavedTxId = null;
   }
 
   // Sync Badge
@@ -524,9 +804,10 @@ function buildTxRowHTML(tx) {
   const sign = isInc ? '+' : '-';
   const cls = isInc ? 'text-income' : 'text-expense';
   const noteStr = tx.note ? ` • ${escapeHTML(tx.note)}` : '';
+  const flashClass = tx.id === lastSavedTxId ? 'flash-new' : '';
 
   return `
-    <div class="tx-row">
+    <div class="tx-row ${flashClass}">
       <div class="tx-left">
         <span class="tx-cat">${escapeHTML(tx.category)}</span>
         <span class="tx-meta">${escapeHTML(tx.date)} • ${escapeHTML(tx.wallet)}${noteStr}</span>
@@ -575,7 +856,7 @@ function saveBudgetEnvelope() {
     appState.budgets.push(record);
   }
 
-  document.getElementById('modal-budget').classList.add('hidden');
+  closeModal('modal-budget');
   showToast(`Pos anggaran ${category} disimpan.`);
   saveState(true);
 }
@@ -608,7 +889,7 @@ function renderBudgetsView() {
   }
 
   listEl.innerHTML = appState.budgets
-    .map((b) => {
+    .map((b, idx) => {
       const spent = spentByCat[b.category] || 0;
       const limit = Number(b.limit) || 1;
       totalLimit += limit;
@@ -624,7 +905,7 @@ function renderBudgetsView() {
       const sisaLabel = sisa >= 0 ? `Sisa ${formatIDR(sisa)}` : `Overbudget ${formatIDR(Math.abs(sisa))}`;
 
       return `
-        <div class="ledger-card">
+        <div class="ledger-card reveal-card" style="--i: ${idx + 2}">
           <div class="budget-item-top">
             <span class="budget-cat-name">${escapeHTML(b.category)}</span>
             <span class="budget-numbers money-val">${formatIDR(spent)} / ${formatIDR(limit)}</span>
@@ -678,7 +959,6 @@ function renderReportView() {
     }
   });
 
-  // Savings Rate
   const savingsRate = inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0;
   const srEl = document.getElementById('rep-savings-rate');
   srEl.textContent = `${savingsRate}%`;
@@ -686,7 +966,6 @@ function renderReportView() {
   document.getElementById('rep-savings-note').textContent =
     inc > 0 ? `Surplus ${formatIDR(inc - exp)}` : 'Belum ada pemasukan periode ini';
 
-  // Month-over-Month Expense Comparison
   const prevDate = new Date(y, m - 1, 1);
   const prevYM = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
   const prevExp = appState.transactions
@@ -712,7 +991,6 @@ function renderReportView() {
     }
   }
 
-  // Top 3 Pos Bocor
   const leaks = Object.entries(catTotals)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
@@ -738,7 +1016,6 @@ function renderReportView() {
       .join('');
   }
 
-  // Full Transaction List for Period
   const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
   const fullListEl = document.getElementById('rep-full-tx-list');
   if (sorted.length === 0) {
@@ -798,9 +1075,7 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
-      },
+      plugins: { legend: { display: false } },
       scales: {
         x: {
           grid: { display: false },
@@ -879,7 +1154,7 @@ function printMonthlyReceipt() {
 }
 
 /* =========================================================
-   SMART TOOLS: RECURRING BILLS & 7-DAY WISHLIST COOLDOWN
+   TOOLS VIEW: WALLETS, CATEGORIES, RECURRING BILLS & WISHLIST
    ========================================================= */
 function saveRecurringBill() {
   const name = document.getElementById('bill-name').value.trim();
@@ -904,7 +1179,7 @@ function saveRecurringBill() {
     updatedAt: new Date().toISOString()
   });
 
-  document.getElementById('modal-bill').classList.add('hidden');
+  closeModal('modal-bill');
   showToast('Tagihan rutin ditambahkan.');
   saveState(true);
 }
@@ -920,8 +1195,9 @@ function payRecurringBill(billId) {
   bill.paidPeriod = currentYM;
   bill.updatedAt = nowISO;
 
+  const newId = uid('tx');
   appState.transactions.push({
-    id: uid('tx'),
+    id: newId,
     type: 'expense',
     amount: bill.amount,
     category: bill.category,
@@ -930,6 +1206,7 @@ function payRecurringBill(billId) {
     note: `Tagihan: ${bill.name}`,
     updatedAt: nowISO
   });
+  lastSavedTxId = newId;
 
   showToast(`Tagihan ${bill.name} lunas & tercatat.`);
   saveState(true);
@@ -965,7 +1242,7 @@ function saveWishlistItem() {
     updatedAt: new Date(now).toISOString()
   });
 
-  document.getElementById('modal-wish').classList.add('hidden');
+  closeModal('modal-wish');
   showToast('Wishlist masuk masa tunggu 7 hari.');
   saveState(true);
 }
@@ -978,16 +1255,23 @@ function buyWishlistItem(wishId) {
   item.purchased = true;
   item.updatedAt = nowISO;
 
+  const defaultCat = appState.categories.expense.includes('Belanja')
+    ? 'Belanja'
+    : appState.categories.expense[0];
+  const defaultWallet = appState.wallets[0] || 'Tunai';
+
+  const newId = uid('tx');
   appState.transactions.push({
-    id: uid('tx'),
+    id: newId,
     type: 'expense',
     amount: item.price,
-    category: 'Belanja',
-    wallet: 'QRIS / E-Wallet',
+    category: defaultCat,
+    wallet: defaultWallet,
     date: getTodayISO(),
     note: `Wishlist: ${item.name}`,
     updatedAt: nowISO
   });
+  lastSavedTxId = newId;
 
   showToast(`${item.name} dibeli & dicatat sebagai pengeluaran.`);
   saveState(true);
@@ -999,7 +1283,64 @@ function deleteWishlistItem(wishId) {
   saveState(true);
 }
 
+function renderCategoryManager() {
+  const listEl = document.getElementById('tools-category-list');
+  const cats = appState.categories[activeManageCatTab] || [];
+
+  listEl.innerHTML = cats
+    .map(
+      (cat) => `
+        <div class="cat-pill">
+          <span>${escapeHTML(cat)}</span>
+          <div class="cat-pill-actions">
+            <button type="button" class="pill-icon-btn" data-rename-cat="${escapeHTML(cat)}" title="Ubah nama">✎</button>
+            <button type="button" class="pill-icon-btn del" data-del-cat="${escapeHTML(cat)}" title="Hapus">✕</button>
+          </div>
+        </div>
+      `
+    )
+    .join('');
+
+  listEl.querySelectorAll('[data-rename-cat]').forEach((btn) =>
+    btn.addEventListener('click', () => openCategoryModal(activeManageCatTab, btn.dataset.renameCat))
+  );
+  listEl.querySelectorAll('[data-del-cat]').forEach((btn) =>
+    btn.addEventListener('click', () => deleteCategory(activeManageCatTab, btn.dataset.delCat))
+  );
+}
+
 function renderToolsView() {
+  // 1. Wallet Manager List
+  const walletListEl = document.getElementById('tools-wallet-list');
+  walletListEl.innerHTML = appState.wallets
+    .map((w) => {
+      const txCount = appState.transactions.filter((t) => t.wallet === w).length;
+      return `
+        <div class="tx-row">
+          <div class="tx-left">
+            <span class="tx-cat">${escapeHTML(w)}</span>
+            <span class="tx-meta">${txCount} transaksi tercatat</span>
+          </div>
+          <div class="action-row-sm">
+            <button type="button" class="btn-outline-sm" data-rename-wallet="${escapeHTML(w)}">Rename</button>
+            <button type="button" class="mini-action-btn del" data-del-wallet="${escapeHTML(w)}">Hapus</button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+
+  walletListEl.querySelectorAll('[data-rename-wallet]').forEach((btn) =>
+    btn.addEventListener('click', () => openWalletModal(btn.dataset.renameWallet))
+  );
+  walletListEl.querySelectorAll('[data-del-wallet]').forEach((btn) =>
+    btn.addEventListener('click', () => deleteWallet(btn.dataset.delWallet))
+  );
+
+  // 2. Category Manager
+  renderCategoryManager();
+
+  // 3. Recurring Bills
   const currentYM = getCurrentPeriodYM();
   const billListEl = document.getElementById('tools-bill-list');
 
@@ -1013,7 +1354,7 @@ function renderToolsView() {
           <div class="ledger-card tool-row">
             <div>
               <div class="tx-cat">${escapeHTML(b.name)}</div>
-              <div class="tx-meta money-val">${formatIDR(b.amount)} • Jatuh tempo tgl ${b.dueDay}</div>
+              <div class="tx-meta money-val">${formatIDR(b.amount)} • Jatuh tempo tgl ${b.dueDay} (${escapeHTML(b.wallet)})</div>
             </div>
             <div class="action-row-sm">
               ${
@@ -1036,7 +1377,7 @@ function renderToolsView() {
     );
   }
 
-  // Wishlist Cooldown List
+  // 4. Wishlist Cooldown List
   const wishListEl = document.getElementById('tools-wish-list');
   const activeWishes = appState.wishlist.filter((w) => !w.purchased);
 
@@ -1106,7 +1447,9 @@ async function pushSyncToCloud(silent = false) {
           transactions: appState.transactions,
           budgets: appState.budgets,
           bills: appState.bills,
-          wishlist: appState.wishlist
+          wishlist: appState.wishlist,
+          categories: appState.categories,
+          wallets: appState.wallets
         }
       })
     });
@@ -1114,7 +1457,7 @@ async function pushSyncToCloud(silent = false) {
     if (json.status === 'success') {
       appState.settings.lastSync = json.syncedAt || new Date().toISOString();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-      renderDashboard();
+      renderDashboard(false);
       renderToolsView();
       if (!silent) showToast('Data tersinkron ke Google Sheets.');
     } else if (!silent) {
@@ -1137,7 +1480,6 @@ async function syncBidirectional() {
   syncBtn.classList.add('spinning');
 
   try {
-    // Jika lokal masih kosong, tarik data dari cloud terlebih dahulu
     if (appState.transactions.length === 0 && appState.budgets.length === 0) {
       const getRes = await fetch(url);
       const getJson = await getRes.json();
@@ -1146,6 +1488,8 @@ async function syncBidirectional() {
         appState.budgets = getJson.data.budgets || [];
         appState.bills = getJson.data.bills || [];
         appState.wishlist = getJson.data.wishlist || [];
+        if (getJson.data.categories) appState.categories = getJson.data.categories;
+        if (getJson.data.wallets) appState.wallets = getJson.data.wallets;
         appState.settings.lastSync = new Date().toISOString();
         saveState(false);
         showToast('Data dipulihkan dari Google Sheets.');
@@ -1184,6 +1528,8 @@ function importBackupJSON(event) {
       appState.budgets = imported.budgets || [];
       appState.bills = imported.bills || [];
       appState.wishlist = imported.wishlist || [];
+      if (imported.categories) appState.categories = imported.categories;
+      if (imported.wallets) appState.wallets = imported.wallets;
       saveState(true);
       showToast('Data berhasil dipulihkan dari JSON.');
     } catch (err) {
