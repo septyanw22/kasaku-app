@@ -10,7 +10,10 @@
   "background_color": "#F4F1EA",
   "theme_color": "#18181B",
   "lang": "id-ID",
-  "categories": ["finance", "productivity"],
+  "categories": [
+    "finance",
+    "productivity"
+  ],
   "prefer_related_applications": false,
   "icons": [
     {
