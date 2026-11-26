@@ -1,7 +1,8 @@
 /**
- * KASAKU v3 — Core Application Logic
- * Features: Editable Recurring Bills + Due Alerts, Wallet Transfers + Admin Fee,
- * Savings Goals (Celengan), Custom Payday Cycle, Search/Filter, & Button Morphing
+ * KASAKU v5 — Core Application Logic
+ * Features: Category Composition Donut Chart, Smart Timestamp Cloud Merge,
+ * Savings Allocation Isolation, Editable Monthly/Yearly Bills, Wallet Transfers,
+ * Custom Payday Cycle, Search/Filter, & Liquid Button Morphing Engine
  */
 
 const STORAGE_KEY = 'kasaku_ledger_v1';
@@ -30,6 +31,16 @@ const DEFAULT_WALLETS = ['QRIS / E-Wallet', 'Tunai', 'Rekening Bank'];
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+];
+
+const DONUT_PALETTE_EXPENSE = [
+  '#D6453A', '#3655F5', '#D9822B', '#6D3DF2',
+  '#1F74B8', '#0C8A61', '#E05297', '#64748B'
+];
+
+const DONUT_PALETTE_INCOME = [
+  '#0C8A61', '#3655F5', '#1F74B8', '#6D3DF2',
+  '#14B8A6', '#D9822B', '#64748B'
 ];
 
 let appState = {
@@ -61,11 +72,14 @@ let depositingGoalId = null;
 let editingWalletOldName = null;
 let editingCategoryState = null;
 let activeManageCatTab = 'expense';
+let donutChartMode = 'expense';
 let reportFilterType = 'all';
 let reportSearchQuery = '';
 let lastSavedTxId = null;
 let prevNetBalance = 0;
 let cashflowChartInstance = null;
+let categoryDonutChartInstance = null;
+let cloudPushTimer = null;
 
 /* =========================================================
    INITIALIZATION & STORAGE
@@ -78,7 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   renderAll(true);
   registerServiceWorker();
+  handleLaunchShortcut();
 });
+
+function handleLaunchShortcut() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('action') === 'new') {
+    openTxModal();
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
 
 function loadState() {
   try {
@@ -133,12 +156,19 @@ function saveState(triggerAutoSync = true) {
   refreshDynamicSelects();
   renderAll(false);
   if (triggerAutoSync && appState.settings.gasUrl && navigator.onLine) {
-    pushSyncToCloud(true);
+    scheduleCloudPush();
   }
 }
 
+function scheduleCloudPush() {
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(() => {
+    pushSyncToCloud(true);
+  }, 1400);
+}
+
 /* =========================================================
-   DATE, CYCLE & MOTION HELPERS
+   DATE, CYCLE & LIQUID MORPHING MOTION HELPERS
    ========================================================= */
 function formatIDR(num) {
   const value = Math.round(Number(num) || 0);
@@ -157,8 +187,9 @@ function getTodayISO() {
   return toISODate(new Date());
 }
 
-function getCurrentPeriodYM() {
+function getCurrentPeriodKey(frequency = 'monthly') {
   const now = new Date();
+  if (frequency === 'yearly') return String(now.getFullYear());
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -215,7 +246,7 @@ function triggerButtonMorph(btnEl, successLabel = 'Tersimpan', callback = null) 
       <svg class="morph-check-svg" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>
       <span>${escapeHTML(successLabel)}</span>
     `;
-  }, 110);
+  }, 115);
 
   setTimeout(() => {
     btnEl.classList.remove('is-morphing', 'is-success');
@@ -224,13 +255,23 @@ function triggerButtonMorph(btnEl, successLabel = 'Tersimpan', callback = null) 
   }, 680);
 }
 
+function animateGliderMorph(gliderEl, translatePercent) {
+  if (!gliderEl) return;
+  gliderEl.classList.add('is-stretching');
+  gliderEl.style.transform = `translateX(${translatePercent}%) scaleX(1.12) scaleY(0.88)`;
+  setTimeout(() => {
+    gliderEl.classList.remove('is-stretching');
+    gliderEl.style.transform = `translateX(${translatePercent}%) scaleX(1) scaleY(1)`;
+  }, 170);
+}
+
 function animateCurrencyRoll(el, startVal, endVal) {
   if (!el) return;
   if (startVal === endVal || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     el.textContent = formatIDR(endVal);
     return;
   }
-  const duration = 400;
+  const duration = 420;
   const startTime = performance.now();
 
   function step(now) {
@@ -330,9 +371,11 @@ function initSelectors() {
 }
 
 function bindEvents() {
-  // Bottom Tab Navigation
   document.querySelectorAll('.nav-item').forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      switchTab(btn.dataset.tab);
+    });
   });
 
   document.getElementById('btn-see-all-tx').addEventListener('click', () => switchTab('view-report'));
@@ -349,8 +392,8 @@ function bindEvents() {
     document.getElementById('section-manage-wallets').scrollIntoView({ behavior: 'smooth' });
   });
 
-  // Theme & Privacy
   document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+    triggerHaptic(10);
     const next = appState.settings.theme === 'light' ? 'dark' : 'light';
     appState.settings.theme = next;
     applyTheme(next);
@@ -358,16 +401,16 @@ function bindEvents() {
   });
 
   document.getElementById('btn-privacy-toggle').addEventListener('click', () => {
+    triggerHaptic(10);
     appState.settings.privacyMode = !appState.settings.privacyMode;
     applyPrivacy(appState.settings.privacyMode);
     saveState(false);
   });
 
-  // Quick Sync Header Button
   document.getElementById('btn-sync-quick').addEventListener('click', syncBidirectional);
 
-  // Open / Toggle Transaction Modal via Morphing FAB
   document.getElementById('btn-open-tx-modal').addEventListener('click', () => {
+    triggerHaptic(12);
     if (document.getElementById('modal-tx').classList.contains('open')) {
       closeModal('modal-tx');
     } else {
@@ -375,12 +418,13 @@ function bindEvents() {
     }
   });
 
-  // Switch Expense / Income / Transfer inside Tx Modal
   document.querySelectorAll('[data-tx-type]').forEach((btn) => {
-    btn.addEventListener('click', () => setTxType(btn.dataset.txType));
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      setTxType(btn.dataset.txType);
+    });
   });
 
-  // Custom Numpad Keys
   document.querySelectorAll('.pad-key[data-key]').forEach((keyBtn) => {
     keyBtn.addEventListener('click', () => {
       triggerHaptic(8);
@@ -388,18 +432,17 @@ function bindEvents() {
     });
   });
 
-  // Quick Chip Adders
   document.querySelectorAll('.chip-add').forEach((chip) => {
     chip.addEventListener('click', () => {
       triggerHaptic(8);
       const add = Number(chip.dataset.addVal) || 0;
       const current = Number(currentNumpadRaw) || 0;
-      currentNumpadRaw = String(current + add);
+      const next = Math.min(999999999999, current + add);
+      currentNumpadRaw = String(next);
       updateNumpadDisplay(true);
     });
   });
 
-  // Physical Keyboard Support when Tx Modal is Open
   document.addEventListener('keydown', (e) => {
     const txModalOpen = document.getElementById('modal-tx').classList.contains('open');
     if (!txModalOpen) return;
@@ -430,10 +473,8 @@ function bindEvents() {
     }
   });
 
-  // Save Transaction
   document.getElementById('btn-save-tx').addEventListener('click', saveTransactionFromModal);
 
-  // Close Modals
   document.querySelectorAll('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
   });
@@ -443,24 +484,31 @@ function bindEvents() {
     });
   });
 
-  // Budget Modal
   document.getElementById('btn-open-budget-modal').addEventListener('click', () => openBudgetModal());
   document.getElementById('btn-save-budget').addEventListener('click', saveBudgetEnvelope);
 
-  // Savings Goals Modal & Deposit
   document.getElementById('btn-open-goal-modal').addEventListener('click', () => openGoalModal());
   document.getElementById('btn-save-goal').addEventListener('click', saveGoalForm);
   document.getElementById('btn-confirm-deposit').addEventListener('click', confirmGoalDeposit);
 
-  // Report Filters, Search & Exports
+  // Report Filters, Donut Toggle, Search & Exports
   document.getElementById('report-month-select').addEventListener('change', renderReportView);
   document.getElementById('report-year-select').addEventListener('change', renderReportView);
+
+  document.querySelectorAll('[data-donut-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      setDonutChartMode(btn.dataset.donutMode);
+    });
+  });
+
   document.getElementById('rep-search-input').addEventListener('input', (e) => {
     reportSearchQuery = e.target.value.trim().toLowerCase();
     renderReportTxListOnly();
   });
   document.querySelectorAll('[data-filter-type]').forEach((chip) => {
     chip.addEventListener('click', () => {
+      triggerHaptic(8);
       reportFilterType = chip.dataset.filterType;
       document.querySelectorAll('[data-filter-type]').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
@@ -470,11 +518,9 @@ function bindEvents() {
   document.getElementById('btn-export-csv').addEventListener('click', exportMonthlyCSV);
   document.getElementById('btn-print-pdf').addEventListener('click', printMonthlyReceipt);
 
-  // Recurring Bills Modal (Add & Edit)
   document.getElementById('btn-open-bill-modal').addEventListener('click', () => openBillModal());
   document.getElementById('btn-save-bill').addEventListener('click', saveRecurringBillForm);
 
-  // Wishlist Modal
   document.getElementById('btn-open-wish-modal').addEventListener('click', () => {
     document.getElementById('wish-name').value = '';
     document.getElementById('wish-price').value = '';
@@ -483,13 +529,12 @@ function bindEvents() {
   });
   document.getElementById('btn-save-wish').addEventListener('click', saveWishlistItem);
 
-  // Wallet Management Modal
   document.getElementById('btn-open-wallet-modal').addEventListener('click', () => openWalletModal());
   document.getElementById('btn-save-wallet').addEventListener('click', saveWalletForm);
 
-  // Category Management Tabs & Modal
   document.querySelectorAll('[data-cat-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      triggerHaptic(8);
       setManageCatTab(btn.dataset.catTab);
       renderCategoryManager();
     });
@@ -499,14 +544,12 @@ function bindEvents() {
   );
   document.getElementById('btn-save-category').addEventListener('click', saveCategoryForm);
 
-  // Payday Cycle Setting
   document.getElementById('input-cycle-day').addEventListener('change', (e) => {
     appState.settings.cycleStartDay = Number(e.target.value) || 1;
     saveState(false);
     showToast(`Siklus buku kas diatur mulai tgl ${appState.settings.cycleStartDay}.`);
   });
 
-  // Settings & Sync
   document.getElementById('btn-save-gas-url').addEventListener('click', (e) => {
     const url = document.getElementById('input-gas-url').value.trim();
     appState.settings.gasUrl = url;
@@ -547,7 +590,7 @@ function applyTheme(theme) {
   const isDark = theme === 'dark';
   document.getElementById('icon-moon').classList.toggle('hidden', isDark);
   document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
-  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#1B1E26' : '#E6EAF0');
+  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#191D26' : '#E4E9F1');
 }
 
 function applyPrivacy(enabled) {
@@ -639,7 +682,7 @@ function setManageCatTab(type) {
   document.getElementById('btn-cat-tab-expense').classList.toggle('active', type === 'expense');
   document.getElementById('btn-cat-tab-income').classList.toggle('active', type === 'income');
   const glider = document.getElementById('cat-switch-glider');
-  glider.style.transform = type === 'income' ? 'translateX(100%)' : 'translateX(0%)';
+  animateGliderMorph(glider, type === 'income' ? 100 : 0);
 }
 
 function openCategoryModal(type = 'expense', oldName = null) {
@@ -735,7 +778,8 @@ function openTxModal(txToEdit = null) {
 
   if (txToEdit) {
     editingTxId = txToEdit.id;
-    setTxType(txToEdit.type, txToEdit.category);
+    const baseType = txToEdit.type === 'savings' ? 'expense' : txToEdit.type;
+    setTxType(baseType, txToEdit.category);
     currentNumpadRaw = String(Math.round(txToEdit.amount));
 
     if (txToEdit.type === 'transfer') {
@@ -773,7 +817,6 @@ function openTxModal(txToEdit = null) {
 function setTxType(type, preserveCat = null) {
   currentTxType = type;
 
-  // Slide & morph switch glider
   document.getElementById('btn-type-expense').classList.toggle('active', type === 'expense');
   document.getElementById('btn-type-income').classList.toggle('active', type === 'income');
   document.getElementById('btn-type-transfer').classList.toggle('active', type === 'transfer');
@@ -781,7 +824,7 @@ function setTxType(type, preserveCat = null) {
   const glider = document.getElementById('tx-switch-glider');
   glider.className = `switch-glider ${type}`;
   const indexMap = { expense: 0, income: 1, transfer: 2 };
-  glider.style.transform = `translateX(${indexMap[type] * 100}%)`;
+  animateGliderMorph(glider, indexMap[type] * 100);
 
   const isTransfer = type === 'transfer';
   document.getElementById('tx-standard-fields').classList.toggle('hidden', isTransfer);
@@ -869,6 +912,10 @@ function saveTransactionFromModal() {
   if (editingTxId) {
     const idx = appState.transactions.findIndex((t) => t.id === editingTxId);
     if (idx !== -1) {
+      const existingType = appState.transactions[idx].type;
+      if (existingType === 'savings' && currentTxType === 'expense') {
+        payload.type = 'savings';
+      }
       appState.transactions[idx] = { ...appState.transactions[idx], ...payload };
       lastSavedTxId = editingTxId;
     }
@@ -910,8 +957,6 @@ function renderAll(isInitial = false) {
 function renderDashboard(isInitial = false) {
   const cycle = getActiveCycleInfo();
 
-  let totalIncomeAll = 0;
-  let totalExpenseAll = 0;
   let cycleIncome = 0;
   let cycleExpense = 0;
   const walletBalances = {};
@@ -924,33 +969,29 @@ function renderDashboard(isInitial = false) {
     const inCycle = tx.date && tx.date >= cycle.startISO && tx.date <= cycle.endISO;
 
     if (tx.type === 'income') {
-      totalIncomeAll += amt;
       if (inCycle) cycleIncome += amt;
       if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] += amt;
     } else if (tx.type === 'transfer') {
       const fee = Number(tx.fee) || 0;
       if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] -= (amt + fee);
       if (tx.toWallet && walletBalances[tx.toWallet] !== undefined) walletBalances[tx.toWallet] += amt;
-      if (fee > 0) {
-        totalExpenseAll += fee;
-        if (inCycle) cycleExpense += fee;
-      }
+      if (fee > 0 && inCycle) cycleExpense += fee;
+    } else if (tx.type === 'savings') {
+      if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] -= amt;
     } else {
-      totalExpenseAll += amt;
       if (inCycle) cycleExpense += amt;
       if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] -= amt;
     }
   });
 
-  const netBalance = totalIncomeAll - totalExpenseAll;
+  const totalWalletLiquid = Object.values(walletBalances).reduce((s, v) => s + v, 0);
   const netEl = document.getElementById('dash-net-balance');
-  animateCurrencyRoll(netEl, isInitial ? 0 : prevNetBalance, netBalance);
-  prevNetBalance = netBalance;
+  animateCurrencyRoll(netEl, isInitial ? 0 : prevNetBalance, totalWalletLiquid);
+  prevNetBalance = totalWalletLiquid;
 
   document.getElementById('dash-month-in').textContent = formatIDR(cycleIncome);
   document.getElementById('dash-month-out').textContent = formatIDR(cycleExpense);
 
-  // Kalkulasi "Sisa Napas" (Safe-to-Spend Harian sesuai siklus)
   const totalBudgetLimit = appState.budgets.reduce((sum, b) => sum + (Number(b.limit) || 0), 0);
   let remainingPool = 0;
   let hintText = '';
@@ -968,10 +1009,8 @@ function renderDashboard(isInitial = false) {
   document.getElementById('dash-daily-safe').innerHTML = `${formatIDR(dailySafe)}<span class="unit">/hari</span>`;
   document.getElementById('dash-safe-caption').textContent = hintText;
 
-  // Due Recurring Bills Alert Banner (Due <= 5 days or Overdue)
   renderDashboardDueBills();
 
-  // Flexible Wallet Strip
   document.getElementById('dash-wallet-list').innerHTML = appState.wallets
     .map(
       (w) => `
@@ -983,7 +1022,6 @@ function renderDashboard(isInitial = false) {
     )
     .join('');
 
-  // Mini Savings Goals Strip
   const goalsStripEl = document.getElementById('dash-goals-strip');
   if (appState.goals.length === 0) {
     goalsStripEl.innerHTML = `<div class="neu-card empty-state" style="width:100%">Belum ada target tabungan. Klik <strong>+ Target</strong> untuk mulai menabung terarah.</div>`;
@@ -1007,7 +1045,6 @@ function renderDashboard(isInitial = false) {
       .join('');
   }
 
-  // 5 Recent Transactions
   const sorted = [...appState.transactions].sort(
     (a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt)
   );
@@ -1022,7 +1059,6 @@ function renderDashboard(isInitial = false) {
     lastSavedTxId = null;
   }
 
-  // Sync Badge
   const badge = document.getElementById('sync-badge');
   if (appState.settings.lastSync) {
     badge.textContent = 'Tersinkron';
@@ -1034,8 +1070,9 @@ function renderDashboard(isInitial = false) {
 }
 
 function getBillDueStatus(bill) {
-  const currentYM = getCurrentPeriodYM();
-  if (bill.paidPeriod === currentYM) {
+  const freq = bill.frequency || 'monthly';
+  const currentKey = getCurrentPeriodKey(freq);
+  if (bill.paidPeriod === currentKey) {
     return { isPaid: true, daysDiff: 999, label: 'Lunas', badgeClass: 'safe' };
   }
   const now = new Date();
@@ -1098,8 +1135,10 @@ function renderDashboardDueBills() {
 function buildTxRowHTML(tx) {
   const isTransfer = tx.type === 'transfer';
   const isInc = tx.type === 'income';
-  const sign = isTransfer ? '⇄ ' : isInc ? '+' : '-';
-  const cls = isTransfer ? 'text-transfer' : isInc ? 'text-income' : 'text-expense';
+  const isSav = tx.type === 'savings';
+
+  const sign = isTransfer ? '⇄ ' : isInc ? '+' : isSav ? '◈ ' : '-';
+  const cls = isTransfer ? 'text-transfer' : isInc ? 'text-income' : isSav ? 'text-savings' : 'text-expense';
   const noteStr = tx.note ? ` • ${escapeHTML(tx.note)}` : '';
   const flashClass = tx.id === lastSavedTxId ? 'flash-new' : '';
 
@@ -1109,7 +1148,9 @@ function buildTxRowHTML(tx) {
 
   const subMeta = isTransfer
     ? `${escapeHTML(tx.date)} • Transfer${tx.fee ? ` (Admin ${formatIDR(tx.fee)})` : ''}${noteStr}`
-    : `${escapeHTML(tx.date)} • ${escapeHTML(tx.wallet)}${noteStr}`;
+    : isSav
+      ? `${escapeHTML(tx.date)} • Alokasi Tabungan (${escapeHTML(tx.wallet)})${noteStr}`
+      : `${escapeHTML(tx.date)} • ${escapeHTML(tx.wallet)}${noteStr}`;
 
   return `
     <div class="tx-row ${flashClass}">
@@ -1281,20 +1322,18 @@ function confirmGoalDeposit() {
   goal.updatedAt = nowISO;
 
   if (wallet) {
-    const cat = appState.categories.expense.includes('Tabungan')
-      ? 'Tabungan'
-      : appState.categories.expense[appState.categories.expense.length - 1] || 'Lainnya';
-
+    const newId = uid('tx');
     appState.transactions.push({
-      id: uid('tx'),
-      type: 'expense',
+      id: newId,
+      type: 'savings',
       amount,
-      category: cat,
+      category: `Celengan: ${goal.name}`,
       wallet,
       date: getTodayISO(),
-      note: `Celengan: ${goal.name}`,
+      note: `Setoran target ${goal.name}`,
       updatedAt: nowISO
     });
+    lastSavedTxId = newId;
   }
 
   triggerButtonMorph(document.getElementById('btn-confirm-deposit'), 'Tersimpan', () => {
@@ -1379,7 +1418,6 @@ function renderBudgetsAndGoalsView() {
     document.getElementById('budget-total-pct').textContent = `${overallPct}%`;
   }
 
-  // Render Savings Goals List
   const goalsListEl = document.getElementById('goals-list');
   if (appState.goals.length === 0) {
     goalsListEl.innerHTML = `<div class="neu-card empty-state">Belum ada celengan target. Tekan <strong>+ Target</strong> untuk membuat target tabungan.</div>`;
@@ -1403,7 +1441,7 @@ function renderBudgetsAndGoalsView() {
             <div class="budget-footer">
               <span>Terkumpul ${pct}%${deadlineText}</span>
               <div class="action-row-sm">
-                <button type="button" class="neu-btn btn-pill-sm" data-deposit-goal="${g.id}">+ Nabung</button>
+                <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" data-deposit-goal="${g.id}">+ Nabung</button>
                 <button type="button" class="mini-action-btn edit" data-edit-goal="${g.id}">Edit</button>
                 <button type="button" class="mini-action-btn del" data-del-goal="${g.id}">✕</button>
               </div>
@@ -1429,7 +1467,7 @@ function renderBudgetsAndGoalsView() {
 }
 
 /* =========================================================
-   MONTHLY RESUME, SEARCH/FILTER, AUDIT & CHART
+   MONTHLY RESUME, DONUT CHART, SEARCH/FILTER & AUDIT
    ========================================================= */
 function getSelectedPeriodTxs() {
   const m = Number(document.getElementById('report-month-select').value);
@@ -1437,6 +1475,133 @@ function getSelectedPeriodTxs() {
   const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
   const txs = appState.transactions.filter((t) => t.date && t.date.startsWith(ym));
   return { m, y, ym, txs };
+}
+
+function setDonutChartMode(mode) {
+  donutChartMode = mode;
+  document.getElementById('btn-donut-expense').classList.toggle('active', mode === 'expense');
+  document.getElementById('btn-donut-income').classList.toggle('active', mode === 'income');
+
+  const glider = document.getElementById('donut-switch-glider');
+  glider.className = `switch-glider ${mode}`;
+  animateGliderMorph(glider, mode === 'income' ? 100 : 0);
+
+  const { txs } = getSelectedPeriodTxs();
+  renderCategoryDonutChart(txs);
+}
+
+function renderCategoryDonutChart(txs) {
+  const canvas = document.getElementById('category-donut-chart');
+  const legendEl = document.getElementById('donut-legend-list');
+  const centerLabelEl = document.getElementById('donut-center-label');
+  const centerTotalEl = document.getElementById('donut-center-total');
+
+  if (!canvas) return;
+
+  const isExpense = donutChartMode === 'expense';
+  centerLabelEl.textContent = isExpense ? 'TOTAL KELUAR' : 'TOTAL MASUK';
+
+  const totalsMap = {};
+  let grandTotal = 0;
+
+  txs.forEach((t) => {
+    const amt = Number(t.amount) || 0;
+    if (isExpense) {
+      if (t.type === 'expense') {
+        totalsMap[t.category] = (totalsMap[t.category] || 0) + amt;
+        grandTotal += amt;
+      } else if (t.type === 'transfer') {
+        const fee = Number(t.fee) || 0;
+        if (fee > 0) {
+          totalsMap['Biaya Admin Transfer'] = (totalsMap['Biaya Admin Transfer'] || 0) + fee;
+          grandTotal += fee;
+        }
+      }
+    } else if (t.type === 'income') {
+      totalsMap[t.category] = (totalsMap[t.category] || 0) + amt;
+      grandTotal += amt;
+    }
+  });
+
+  centerTotalEl.textContent = formatIDR(grandTotal);
+
+  if (categoryDonutChartInstance) {
+    categoryDonutChartInstance.destroy();
+    categoryDonutChartInstance = null;
+  }
+
+  const entries = Object.entries(totalsMap).sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0 || grandTotal <= 0) {
+    legendEl.innerHTML = `<div class="empty-state" style="grid-column:span 2;padding:12px">Belum ada data ${isExpense ? 'pengeluaran' : 'pemasukan'} di periode ini.</div>`;
+    return;
+  }
+
+  const palette = isExpense ? DONUT_PALETTE_EXPENSE : DONUT_PALETTE_INCOME;
+  const labels = entries.map(([cat]) => cat);
+  const values = entries.map(([, val]) => val);
+  const colors = entries.map((_, idx) => palette[idx % palette.length]);
+
+  const isDark = appState.settings.theme === 'dark';
+
+  if (typeof Chart !== 'undefined') {
+    categoryDonutChartInstance = new Chart(canvas, {
+      type: 'doughnut',
+      data: {
+        labels,
+        datasets: [
+          {
+            data: values,
+            backgroundColor: colors,
+            borderColor: isDark ? '#191D26' : '#E4E9F1',
+            borderWidth: 2.5,
+            hoverOffset: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '66%',
+        animation: {
+          animateRotate: true,
+          animateScale: true,
+          duration: 520
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = Number(ctx.raw) || 0;
+                const pct = Math.round((val / grandTotal) * 100);
+                return ` ${ctx.label}: ${formatIDR(val)} (${pct}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  legendEl.innerHTML = entries
+    .map(([cat, val], idx) => {
+      const pct = Math.max(1, Math.round((val / grandTotal) * 100));
+      const color = colors[idx];
+      return `
+        <div class="donut-legend-item">
+          <div class="legend-top-row">
+            <span class="legend-cat-label">
+              <span class="legend-dot" style="background:${color}"></span>
+              <span class="legend-cat-text">${escapeHTML(cat)}</span>
+            </span>
+            <span class="legend-pct-pill">${pct}%</span>
+          </div>
+          <span class="legend-amt-val money-val">${formatIDR(val)}</span>
+        </div>
+      `;
+    })
+    .join('');
 }
 
 function renderReportView() {
@@ -1456,18 +1621,27 @@ function renderReportView() {
         exp += fee;
         catTotals['Biaya Admin Transfer'] = (catTotals['Biaya Admin Transfer'] || 0) + fee;
       }
+    } else if (t.type === 'savings') {
+      // Alokasi tabungan terpisah dari belanja konsumtif
     } else {
       exp += amt;
       catTotals[t.category] = (catTotals[t.category] || 0) + amt;
     }
   });
 
+  const surplus = inc - exp;
+  document.getElementById('rep-total-in').textContent = formatIDR(inc);
+  document.getElementById('rep-total-out').textContent = formatIDR(exp);
+  const netFlowEl = document.getElementById('rep-net-flow');
+  netFlowEl.textContent = formatIDR(surplus);
+  netFlowEl.className = `rep-total-num money-val ${surplus >= 0 ? 'text-income' : 'text-expense'}`;
+
   const savingsRate = inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0;
   const srEl = document.getElementById('rep-savings-rate');
   srEl.textContent = `${savingsRate}%`;
   srEl.className = `kpi-val ${savingsRate >= 20 ? 'text-income' : savingsRate < 0 ? 'text-expense' : ''}`;
   document.getElementById('rep-savings-note').textContent =
-    inc > 0 ? `Surplus ${formatIDR(inc - exp)}` : 'Belum ada pemasukan periode ini';
+    inc > 0 ? `Surplus ${formatIDR(surplus)}` : 'Belum ada pemasukan periode ini';
 
   const prevDate = new Date(y, m - 1, 1);
   const prevYM = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
@@ -1523,8 +1697,9 @@ function renderReportView() {
       .join('');
   }
 
-  renderReportTxListOnly();
+  renderCategoryDonutChart(txs);
   renderDailyCashflowChart(m, y, txs);
+  renderReportTxListOnly();
 }
 
 function renderReportTxListOnly() {
@@ -1562,7 +1737,7 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
     if (day >= 1 && day <= daysCount) {
       if (t.type === 'income') dailyInc[day - 1] += Number(t.amount) || 0;
       else if (t.type === 'transfer') dailyExp[day - 1] += Number(t.fee) || 0;
-      else dailyExp[day - 1] += Number(t.amount) || 0;
+      else if (t.type === 'expense') dailyExp[day - 1] += Number(t.amount) || 0;
     }
   });
 
@@ -1571,8 +1746,8 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
   }
 
   const isDark = appState.settings.theme === 'dark';
-  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(163,177,198,0.35)';
-  const tickColor = isDark ? '#8C97AB' : '#626E82';
+  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(158,173,196,0.35)';
+  const tickColor = isDark ? '#8A96AC' : '#5B687D';
 
   cashflowChartInstance = new Chart(canvas, {
     type: 'bar',
@@ -1582,7 +1757,7 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
         {
           label: 'Pemasukan',
           data: dailyInc,
-          backgroundColor: isDark ? '#2ED199' : '#0E8A5D',
+          backgroundColor: isDark ? '#2ED199' : '#0C8A61',
           borderRadius: 4
         },
         {
@@ -1625,7 +1800,7 @@ function exportMonthlyCSV() {
   const headers = ['Tanggal', 'Tipe', 'Kategori', 'Dompet Asal', 'Dompet Tujuan', 'Nominal', 'Biaya Admin', 'Catatan'];
   const rows = txs.map((t) => [
     t.date,
-    t.type === 'income' ? 'Pemasukan' : t.type === 'transfer' ? 'Transfer' : 'Pengeluaran',
+    t.type === 'income' ? 'Pemasukan' : t.type === 'transfer' ? 'Transfer' : t.type === 'savings' ? 'Tabungan' : 'Pengeluaran',
     `"${(t.category || '').replace(/"/g, '""')}"`,
     `"${(t.wallet || '').replace(/"/g, '""')}"`,
     `"${(t.toWallet || '').replace(/"/g, '""')}"`,
@@ -1665,7 +1840,7 @@ function printMonthlyReceipt() {
   tbody.innerHTML = txs
     .sort((a, b) => a.date.localeCompare(b.date))
     .map((t) => {
-      const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : '-';
+      const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄' : t.type === 'savings' ? '◈' : '-';
       const walletCol = t.type === 'transfer' ? `${t.wallet} → ${t.toWallet}` : t.wallet;
       return `
         <tr>
@@ -1693,6 +1868,7 @@ function openBillModal(billToEdit = null) {
   const nameInp = document.getElementById('bill-name');
   const amtInp = document.getElementById('bill-amount');
   const dueInp = document.getElementById('bill-due-day');
+  const freqSel = document.getElementById('bill-freq-select');
   const catSel = document.getElementById('bill-category');
   const walSel = document.getElementById('bill-wallet');
   const statusWrap = document.getElementById('bill-edit-status-wrap');
@@ -1700,21 +1876,24 @@ function openBillModal(billToEdit = null) {
   const btnLabel = document.querySelector('#btn-save-bill .btn-label');
 
   if (billToEdit) {
+    const freq = billToEdit.frequency || 'monthly';
     titleEl.textContent = 'Edit Tagihan Rutin';
     nameInp.value = billToEdit.name;
     amtInp.value = billToEdit.amount;
     dueInp.value = billToEdit.dueDay;
+    freqSel.value = freq;
     if ([...catSel.options].some((o) => o.value === billToEdit.category)) catSel.value = billToEdit.category;
     if ([...walSel.options].some((o) => o.value === billToEdit.wallet)) walSel.value = billToEdit.wallet;
 
     statusWrap.classList.remove('hidden');
-    statusSel.value = billToEdit.paidPeriod === getCurrentPeriodYM() ? 'paid' : 'unpaid';
+    statusSel.value = billToEdit.paidPeriod === getCurrentPeriodKey(freq) ? 'paid' : 'unpaid';
     btnLabel.textContent = 'Perbarui Tagihan';
   } else {
     titleEl.textContent = 'Tambah Tagihan Rutin';
     nameInp.value = '';
     amtInp.value = '';
     dueInp.value = '15';
+    freqSel.value = 'monthly';
     statusWrap.classList.add('hidden');
     btnLabel.textContent = 'Simpan Tagihan';
   }
@@ -1726,6 +1905,7 @@ function saveRecurringBillForm() {
   const name = document.getElementById('bill-name').value.trim();
   const amount = Number(document.getElementById('bill-amount').value) || 0;
   const dueDay = Math.min(31, Math.max(1, Number(document.getElementById('bill-due-day').value) || 1));
+  const frequency = document.getElementById('bill-freq-select').value || 'monthly';
   const category = document.getElementById('bill-category').value;
   const wallet = document.getElementById('bill-wallet').value;
 
@@ -1740,12 +1920,13 @@ function saveRecurringBillForm() {
     const idx = appState.bills.findIndex((b) => b.id === editingBillId);
     if (idx !== -1) {
       const statusVal = document.getElementById('bill-status-select').value;
-      const paidPeriod = statusVal === 'paid' ? getCurrentPeriodYM() : '';
+      const paidPeriod = statusVal === 'paid' ? getCurrentPeriodKey(frequency) : '';
       appState.bills[idx] = {
         ...appState.bills[idx],
         name,
         amount,
         dueDay,
+        frequency,
         category,
         wallet,
         paidPeriod,
@@ -1758,9 +1939,10 @@ function saveRecurringBillForm() {
       id: uid('bill'),
       name,
       amount,
+      dueDay,
+      frequency,
       category,
       wallet,
-      dueDay,
       paidPeriod: '',
       updatedAt: nowISO
     });
@@ -1777,12 +1959,13 @@ function payRecurringBill(billId, btnEl = null) {
   const bill = appState.bills.find((b) => b.id === billId);
   if (!bill) return;
 
-  const currentYM = getCurrentPeriodYM();
-  if (bill.paidPeriod === currentYM) return;
+  const freq = bill.frequency || 'monthly';
+  const currentKey = getCurrentPeriodKey(freq);
+  if (bill.paidPeriod === currentKey) return;
 
   const commitPayment = () => {
     const nowISO = new Date().toISOString();
-    bill.paidPeriod = currentYM;
+    bill.paidPeriod = currentKey;
     bill.updatedAt = nowISO;
 
     const newId = uid('tx');
@@ -1807,6 +1990,16 @@ function payRecurringBill(billId, btnEl = null) {
   } else {
     commitPayment();
   }
+}
+
+function resetRecurringBillStatus(billId) {
+  const bill = appState.bills.find((b) => b.id === billId);
+  if (!bill) return;
+  if (!confirm(`Kembalikan status "${bill.name}" menjadi Belum Lunas?`)) return;
+  bill.paidPeriod = '';
+  bill.updatedAt = new Date().toISOString();
+  showToast('Status tagihan direset.');
+  saveState(true);
 }
 
 function deleteRecurringBill(billId) {
@@ -1910,7 +2103,6 @@ function renderCategoryManager() {
 }
 
 function renderToolsView() {
-  // 1. Recurring Bills (Editable + Morph Pay)
   const billListEl = document.getElementById('tools-bill-list');
 
   if (appState.bills.length === 0) {
@@ -1919,6 +2111,7 @@ function renderToolsView() {
     billListEl.innerHTML = appState.bills
       .map((b) => {
         const status = getBillDueStatus(b);
+        const freqTag = b.frequency === 'yearly' ? ' • Tahunan' : '';
         return `
           <div class="neu-card tool-row">
             <div style="min-width:0">
@@ -1926,12 +2119,12 @@ function renderToolsView() {
                 <span>${escapeHTML(b.name)}</span>
                 ${!status.isPaid ? `<span class="due-badge ${status.badgeClass}">${status.label}</span>` : ''}
               </div>
-              <div class="tx-meta money-val">${formatIDR(b.amount)} • ${escapeHTML(b.category)} (${escapeHTML(b.wallet)})</div>
+              <div class="tx-meta money-val">${formatIDR(b.amount)} • ${escapeHTML(b.category)} (${escapeHTML(b.wallet)})${freqTag}</div>
             </div>
             <div class="action-row-sm" style="flex-shrink:0">
               ${
                 status.isPaid
-                  ? `<span class="badge-paid">✓ Lunas</span>`
+                  ? `<button type="button" class="badge-paid" data-reset-bill="${b.id}" title="Ketuk untuk reset lunas">✓ Lunas</button>`
                   : `<button type="button" class="neu-btn btn-pill-sm morph-btn" data-pay-bill="${b.id}"><span class="btn-label">Bayar</span></button>`
               }
               <button type="button" class="mini-action-btn edit" data-edit-bill="${b.id}" title="Edit Tagihan">✎</button>
@@ -1945,6 +2138,9 @@ function renderToolsView() {
     billListEl.querySelectorAll('[data-pay-bill]').forEach((btn) =>
       btn.addEventListener('click', () => payRecurringBill(btn.dataset.payBill, btn))
     );
+    billListEl.querySelectorAll('[data-reset-bill]').forEach((btn) =>
+      btn.addEventListener('click', () => resetRecurringBillStatus(btn.dataset.resetBill))
+    );
     billListEl.querySelectorAll('[data-edit-bill]').forEach((btn) =>
       btn.addEventListener('click', () => {
         const b = appState.bills.find((item) => item.id === btn.dataset.editBill);
@@ -1956,7 +2152,6 @@ function renderToolsView() {
     );
   }
 
-  // 2. Wishlist Cooldown List
   const wishListEl = document.getElementById('tools-wish-list');
   const activeWishes = appState.wishlist.filter((w) => !w.purchased);
 
@@ -1986,7 +2181,7 @@ function renderToolsView() {
               <span class="cooldown-tag">${statusLabel}</span>
             </div>
             <div class="action-row-sm">
-              <button type="button" class="neu-btn btn-pill-sm" ${isUnlocked ? '' : 'disabled'} data-buy-wish="${w.id}">
+              <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" ${isUnlocked ? '' : 'disabled'} data-buy-wish="${w.id}">
                 Beli
               </button>
               <button type="button" class="mini-action-btn del" data-del-wish="${w.id}">✕</button>
@@ -2004,7 +2199,6 @@ function renderToolsView() {
     );
   }
 
-  // 3. Wallet Manager List
   const walletListEl = document.getElementById('tools-wallet-list');
   walletListEl.innerHTML = appState.wallets
     .map((w) => {
@@ -2016,7 +2210,7 @@ function renderToolsView() {
             <span class="tx-meta">${txCount} transaksi tercatat</span>
           </div>
           <div class="action-row-sm">
-            <button type="button" class="neu-btn btn-pill-sm" data-rename-wallet="${escapeHTML(w)}">Rename</button>
+            <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" data-rename-wallet="${escapeHTML(w)}">Rename</button>
             <button type="button" class="mini-action-btn del" data-del-wallet="${escapeHTML(w)}">Hapus</button>
           </div>
         </div>
@@ -2031,7 +2225,6 @@ function renderToolsView() {
     btn.addEventListener('click', () => deleteWallet(btn.dataset.delWallet))
   );
 
-  // 4. Category Manager
   renderCategoryManager();
 
   document.getElementById('settings-last-sync').textContent = appState.settings.lastSync
@@ -2040,8 +2233,27 @@ function renderToolsView() {
 }
 
 /* =========================================================
-   CLOUD SYNC (GOOGLE APPS SCRIPT) & JSON BACKUP
+   SMART BIDIRECTIONAL CLOUD SYNC & JSON BACKUP
    ========================================================= */
+function mergeByKey(localArr, cloudArr, keyField = 'id') {
+  const map = new Map();
+  (cloudArr || []).forEach((item) => {
+    if (item && item[keyField]) map.set(item[keyField], item);
+  });
+  (localArr || []).forEach((item) => {
+    if (!item || !item[keyField]) return;
+    const existing = map.get(item[keyField]);
+    if (!existing) {
+      map.set(item[keyField], item);
+    } else {
+      const localTs = Date.parse(item.updatedAt || 0) || 0;
+      const cloudTs = Date.parse(existing.updatedAt || 0) || 0;
+      if (localTs >= cloudTs) map.set(item[keyField], item);
+    }
+  });
+  return Array.from(map.values());
+}
+
 async function pushSyncToCloud(silent = false) {
   const url = appState.settings.gasUrl;
   if (!url) return;
@@ -2093,24 +2305,34 @@ async function syncBidirectional() {
   syncBtn.classList.add('spinning');
 
   try {
-    if (appState.transactions.length === 0 && appState.budgets.length === 0) {
-      const getRes = await fetch(url);
-      const getJson = await getRes.json();
-      if (getJson.status === 'success' && getJson.data) {
-        appState.transactions = getJson.data.transactions || [];
-        appState.budgets = getJson.data.budgets || [];
-        appState.bills = getJson.data.bills || [];
-        appState.wishlist = getJson.data.wishlist || [];
-        appState.goals = getJson.data.goals || [];
-        if (getJson.data.categories) appState.categories = getJson.data.categories;
-        if (getJson.data.wallets) appState.wallets = getJson.data.wallets;
-        appState.settings.lastSync = new Date().toISOString();
-        saveState(false);
-        showToast('Data dipulihkan dari Google Sheets.');
-        return;
+    const getRes = await fetch(url);
+    const getJson = await getRes.json();
+    if (getJson.status === 'success' && getJson.data) {
+      const cd = getJson.data;
+      appState.transactions = mergeByKey(appState.transactions, cd.transactions, 'id');
+      appState.budgets = mergeByKey(appState.budgets, cd.budgets, 'category');
+      appState.bills = mergeByKey(appState.bills, cd.bills, 'id');
+      appState.wishlist = mergeByKey(appState.wishlist, cd.wishlist, 'id');
+      appState.goals = mergeByKey(appState.goals, cd.goals, 'id');
+
+      if (Array.isArray(cd.wallets)) {
+        cd.wallets.forEach((w) => {
+          if (w && !appState.wallets.includes(w)) appState.wallets.push(w);
+        });
+      }
+      if (cd.categories?.expense) {
+        cd.categories.expense.forEach((c) => {
+          if (c && !appState.categories.expense.includes(c)) appState.categories.expense.push(c);
+        });
+      }
+      if (cd.categories?.income) {
+        cd.categories.income.forEach((c) => {
+          if (c && !appState.categories.income.includes(c)) appState.categories.income.push(c);
+        });
       }
     }
     await pushSyncToCloud(false);
+    saveState(false);
   } catch (err) {
     showToast('Gagal terhubung ke Google Sheets.');
   } finally {
