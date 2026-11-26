@@ -1,41 +1,41 @@
 {
-  "id": "/kasaku-app/",
-  "name": "KASAKU — Buku Kas Pribadi",
-  "short_name": "KASAKU",
-  "description": "Aplikasi pencatat keuangan harian, anggaran amplop, dan audit arus kas offline-first.",
-  "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#F4F1EA",
-  "theme_color": "#18181B",
-  "lang": "id-ID",
-  "categories": [
-    "finance",
-    "productivity"
-  ],
-  "prefer_related_applications": false,
-  "icons": [
-    {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Tampilan Utama KASAKU"
-    }
-  ]
+"id": "/kasaku-app/",
+"name": "KASAKU — Buku Kas Pribadi",
+"short_name": "KASAKU",
+"description": "Aplikasi pencatat keuangan harian, anggaran amplop, dan audit arus kas offline-first.",
+"start_url": "./index.html",
+"scope": "./",
+"display": "standalone",
+"orientation": "portrait",
+"background_color": "#EBF0F5",
+"theme_color": "#14161A",
+"lang": "id-ID",
+"categories": [
+"finance",
+"productivity"
+],
+"prefer_related_applications": false,
+"icons": [
+{
+"src": "./icon-192.png",
+"sizes": "192x192",
+"type": "image/png",
+"purpose": "any"
+},
+{
+"src": "./icon-512.png",
+"sizes": "512x512",
+"type": "image/png",
+"purpose": "any maskable"
+}
+],
+"screenshots": [
+{
+"src": "./icon-512.png",
+"sizes": "512x512",
+"type": "image/png",
+"form_factor": "narrow",
+"label": "Tampilan Utama KASAKU"
+}
+]
 }
