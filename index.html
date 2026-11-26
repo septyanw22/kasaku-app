@@ -1,702 +1,466 @@
 <!DOCTYPE html>
-<html lang="id" data-theme="light">
+<html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#E4E9F1" id="meta-theme-color" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>KASAKU — Buku Kas Pribadi</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" type="image/png" href="icon-192.png" />
-  <link rel="apple-touch-icon" href="icon-192.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js" defer></script>
-  <script src="app.js" defer></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#e0e5ec">
+  <meta name="description" content="KASAKU — Aplikasi Pencatatan Keuangan Pribadi & Tagihan Rutin">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="KASAKU">
+
+  <title>KASAKU — Keuangan & Tagihan</title>
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+
+  <style>
+    :root {
+      --bg-base: #e0e5ec;
+      --bg-card: #e0e5ec;
+      --shadow-dark: #b8bec7;
+      --shadow-light: #ffffff;
+      --text-primary: #2d3748;
+      --text-secondary: #5a677d;
+      --accent-blue: #3182ce;
+      --accent-cyan: #0bc5ea;
+      --accent-teal: #2c7a7b;
+      --danger: #e53e3e;
+      --success: #2f855a;
+      --warning: #dd6b20;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      padding: 0 0 88px 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 540px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .neu-card {
+      background: var(--bg-card);
+      border-radius: 20px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 7px 7px 14px var(--shadow-dark), -7px -7px 14px var(--shadow-light);
+    }
+
+    .neu-inset {
+      background: var(--bg-base);
+      border-radius: 14px;
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+    }
+
+    .neu-btn {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      border: none;
+      border-radius: 14px;
+      padding: 11px 16px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .neu-btn:active,
+    .neu-btn.active {
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+      transform: scale(0.98);
+      color: var(--accent-blue);
+    }
+
+    .neu-btn-primary {
+      background: linear-gradient(135deg, #3182ce, #2b6cb0);
+      color: #ffffff;
+      border: none;
+      border-radius: 14px;
+      padding: 12px 18px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
+      transition: all 0.2s ease;
+    }
+
+    .neu-btn-primary:active {
+      transform: scale(0.97);
+      opacity: 0.92;
+    }
+
+    .neu-input,
+    .neu-select {
+      width: 100%;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      border: none;
+      border-radius: 12px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-size: 14px;
+      outline: none;
+      box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light);
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 6px 4px;
+    }
+
+    .app-title {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: var(--accent-blue);
+    }
+
+    .sync-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 999px;
+      color: var(--accent-teal);
+      box-shadow: 3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .summary-box {
+      padding: 12px;
+      border-radius: 14px;
+      box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    }
+
+    .label-muted {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      display: block;
+    }
+
+    .tab-section {
+      display: none;
+    }
+
+    .tab-section.active {
+      display: block;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-base);
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-around;
+      gap: 8px;
+      box-shadow: 0 -4px 12px rgba(184, 190, 199, 0.55);
+      z-index: 100;
+    }
+
+    .nav-item {
+      flex: 1;
+      max-width: 120px;
+      padding: 9px 6px;
+      font-size: 12px;
+      text-align: center;
+      border-radius: 14px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .badge-info { background: #bee3f8; color: #2b6cb0; }
+    .badge-warn { background: #feebc8; color: #c05621; }
+    .badge-danger { background: #fed7d7; color: #c53030; }
+    .badge-success { background: #c6f6d5; color: #276749; }
+
+    .item-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      border-radius: 14px;
+      box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+    }
+
+    .item-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 10px;
+    }
+  </style>
 </head>
 <body>
-  <div class="app-shell">
-    <!-- TOP BAR -->
-    <header class="top-bar no-print">
-      <div class="brand-block">
-        <div class="brand-logo-badge" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 36 36" fill="none">
-            <path d="M11 7V25M11 16L22 7M14.5 13.5L23 25" stroke="#F4F1EA" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
-            <line x1="9" y1="29.5" x2="25" y2="29.5" stroke="#C84B31" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div>
-          <h1 class="brand-title">KASAKU</h1>
-          <p class="brand-sub" id="header-period-label">Buku Kas • Nov 2026</p>
-        </div>
+  <div class="container">
+    <!-- Header -->
+    <header class="app-header">
+      <div>
+        <h1 class="app-title">KASAKU</h1>
+        <span id="headerSubtitle" class="label-muted" style="margin:0;">Catatan Keuangan Pribadi</span>
       </div>
-      <div class="header-actions">
-        <button type="button" class="neu-btn icon-btn morph-icon-btn" id="btn-sync-quick" title="Sinkronisasi Cloud" aria-label="Sinkronisasi Cloud">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
-        </button>
-        <button type="button" class="neu-btn icon-btn morph-icon-btn" id="btn-privacy-toggle" title="Mode Privasi" aria-label="Sembunyikan Nominal">
-          <svg id="icon-eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg id="icon-eye-closed" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-        </button>
-        <button type="button" class="neu-btn icon-btn morph-icon-btn" id="btn-theme-toggle" title="Ganti Tema" aria-label="Ganti Tema Gelap/Terang">
-          <svg id="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-          <svg id="icon-sun" class="hidden" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-        </button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span id="syncStatus" class="sync-pill">Cloud Siap</span>
       </div>
     </header>
 
-    <!-- MAIN CONTENT AREA -->
-    <main class="main-content">
-      <!-- TAB 1: BERANDA -->
-      <section id="view-home" class="tab-view active">
-        <div class="neu-card hero-ledger reveal-card" style="--i: 0">
-          <div class="ledger-meta-row">
-            <span class="mono-tag">SALDO LIKUID DOMPET</span>
-            <span class="status-pill neu-inset-pill" id="sync-badge">Lokal</span>
-          </div>
-          <div class="hero-balance money-val" id="dash-net-balance">Rp 0</div>
+    <!-- Filter Bulan Global -->
+    <div class="neu-card" style="padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
+      <span class="label-muted" style="margin:0; font-weight:600;">Periode Laporan</span>
+      <input id="monthFilter" type="month" class="neu-input" style="width:auto; margin:0; padding:8px 12px;">
+    </div>
 
-          <div class="sisa-napas-well neu-inset">
-            <div class="sisa-napas-header">
-              <span class="sisa-label">JATAH AMAN HARIAN (SISA NAPAS)</span>
-              <span class="sisa-days morph-pill-tag" id="dash-days-left">0 hari tersisa</span>
-            </div>
-            <div class="sisa-amount money-val" id="dash-daily-safe">Rp 0<span class="unit">/hari</span></div>
-            <p class="sisa-hint" id="dash-safe-caption">Dihitung dari sisa anggaran siklus berjalan dibagi sisa hari.</p>
-          </div>
+    <!-- TAB 1: RINGKASAN / DASHBOARD -->
+    <section id="tab-dashboard" class="tab-section active">
+      <div class="neu-card">
+        <span class="label-muted">Total Saldo Seluruh Dompet</span>
+        <h2 id="totalBalance" style="margin:4px 0 0; font-size:26px; color:#2b6cb0;">Rp 0</h2>
 
-          <div class="flow-split">
-            <div class="flow-item neu-inset-sm">
-              <span class="flow-tag">MASUK SIKLUS INI</span>
-              <span class="flow-num text-income money-val" id="dash-month-in">Rp 0</span>
-            </div>
-            <div class="flow-item neu-inset-sm">
-              <span class="flow-tag">KELUAR SIKLUS INI</span>
-              <span class="flow-num text-expense money-val" id="dash-month-out">Rp 0</span>
-            </div>
+        <div class="summary-grid">
+          <div class="summary-box">
+            <span class="label-muted">Pemasukan Bulan Ini</span>
+            <strong id="monthlyIncome" style="color:var(--success); font-size:15px;">Rp 0</strong>
+          </div>
+          <div class="summary-box">
+            <span class="label-muted">Pengeluaran Bulan Ini</span>
+            <strong id="monthlyExpense" style="color:var(--danger); font-size:15px;">Rp 0</strong>
           </div>
         </div>
+      </div>
 
-        <!-- DUE RECURRING BILLS BANNER -->
-        <div id="dash-due-bills-wrap" class="hidden">
-          <div class="section-head">
-            <h2>Tagihan Mendekati Jatuh Tempo</h2>
-            <button type="button" class="text-link" id="btn-see-all-bills">Semua Tagihan</button>
-          </div>
-          <div id="dash-due-bills-list" class="stack-list"></div>
+      <div class="neu-card">
+        <h3 style="margin:0 0 12px; font-size:16px;">Saldo per Dompet</h3>
+        <div id="walletSummaryList">
+          <p class="label-muted">Memuat data dompet...</p>
         </div>
+      </div>
 
-        <!-- WALLET STRIP -->
-        <div class="section-head reveal-card" style="--i: 1">
-          <h2>Dompet & Akun</h2>
-          <button type="button" class="text-link" id="btn-manage-wallets-shortcut">Kelola</button>
+      <div class="neu-card">
+        <h3 style="margin:0 0 12px; font-size:16px;">Transaksi Terbaru</h3>
+        <div id="recentTransactionsList">
+          <p class="label-muted">Belum ada transaksi pada periode ini.</p>
         </div>
-        <div class="wallet-strip reveal-card" style="--i: 2" id="dash-wallet-list"></div>
-
-        <!-- MINI SAVINGS GOALS STRIP -->
-        <div class="section-head reveal-card" style="--i: 3">
-          <h2>Target Tabungan</h2>
-          <button type="button" class="text-link" id="btn-see-goals-shortcut">+ Target</button>
-        </div>
-        <div class="goal-strip reveal-card" style="--i: 4" id="dash-goals-strip"></div>
-
-        <!-- RECENT TRANSACTIONS -->
-        <div class="section-head reveal-card" style="--i: 5">
-          <h2>Mutasi Terakhir</h2>
-          <button type="button" class="text-link" id="btn-see-all-tx">Lihat Semua</button>
-        </div>
-        <div class="neu-card list-card reveal-card" style="--i: 6" id="dash-recent-tx"></div>
-      </section>
-
-      <!-- TAB 2: ANGGARAN & TARGET TABUNGAN -->
-      <section id="view-budget" class="tab-view">
-        <div class="section-head top-section reveal-card" style="--i: 0">
-          <div>
-            <h2>Pos Anggaran</h2>
-            <p class="section-desc">Batas belanja per siklus (Envelope).</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-budget-modal">+ Atur Pos</button>
-        </div>
-
-        <div class="neu-card summary-strip reveal-card" style="--i: 1">
-          <div>
-            <span class="mono-tag">TOTAL TERPAKAI / PAGU</span>
-            <div class="strip-value money-val" id="budget-total-summary">Rp 0 / Rp 0</div>
-          </div>
-          <div class="strip-pct" id="budget-total-pct">0%</div>
-        </div>
-
-        <div id="budget-list" class="stack-list"></div>
-
-        <!-- SAVINGS GOALS (CELENGAN) -->
-        <div class="section-head reveal-card" style="--i: 3">
-          <div>
-            <h2>Celengan & Target Tabungan</h2>
-            <p class="section-desc">Pantau progres dana darurat & impian.</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-goal-modal">+ Target</button>
-        </div>
-        <div id="goals-list" class="stack-list"></div>
-      </section>
-
-      <!-- TAB 3: LAPORAN & AUDIT BULANAN -->
-      <section id="view-report" class="tab-view">
-        <div class="section-head top-section reveal-card" style="--i: 0">
-          <div>
-            <h2>Resume Bulanan</h2>
-            <p class="section-desc">Audit arus kas & komposisi kategori.</p>
-          </div>
-          <div class="filter-group">
-            <select id="report-month-select" class="neu-select" aria-label="Pilih Bulan"></select>
-            <select id="report-year-select" class="neu-select" aria-label="Pilih Tahun"></select>
-          </div>
-        </div>
-
-        <!-- RINGKASAN NOMINAL PERIODE -->
-        <div class="neu-card rep-totals-card reveal-card" style="--i: 1">
-          <div class="rep-total-col">
-            <span class="flow-tag">MASUK</span>
-            <span class="rep-total-num text-income money-val" id="rep-total-in">Rp 0</span>
-          </div>
-          <div class="rep-total-col">
-            <span class="flow-tag">KELUAR</span>
-            <span class="rep-total-num text-expense money-val" id="rep-total-out">Rp 0</span>
-          </div>
-          <div class="rep-total-col">
-            <span class="flow-tag">SURPLUS</span>
-            <span class="rep-total-num money-val" id="rep-net-flow">Rp 0</span>
-          </div>
-        </div>
-
-        <!-- KPI AUDIT CARDS -->
-        <div class="audit-grid reveal-card" style="--i: 2">
-          <div class="neu-card kpi-card">
-            <span class="mono-tag">SAVINGS RATE</span>
-            <div class="kpi-val" id="rep-savings-rate">0%</div>
-            <span class="kpi-sub" id="rep-savings-note">Rasio tabungan bersih</span>
-          </div>
-          <div class="neu-card kpi-card">
-            <span class="mono-tag">VS BULAN LALU</span>
-            <div class="kpi-val" id="rep-mom-diff">0%</div>
-            <span class="kpi-sub" id="rep-mom-note">Perbandingan belanja</span>
-          </div>
-        </div>
-
-        <!-- DONUT CHART: KOMPOSISI KATEGORI -->
-        <div class="neu-card chart-card reveal-card" style="--i: 3">
-          <div class="card-header-inline">
-            <span class="mono-tag">KOMPOSISI KATEGORI</span>
-            <div class="neu-switch mini-switch">
-              <div class="switch-glider expense" id="donut-switch-glider"></div>
-              <button type="button" class="switch-opt active" data-donut-mode="expense" id="btn-donut-expense">Keluar</button>
-              <button type="button" class="switch-opt" data-donut-mode="income" id="btn-donut-income">Masuk</button>
-            </div>
-          </div>
-          <div class="donut-stage" id="donut-stage-box">
-            <div class="donut-canvas-wrap">
-              <canvas id="category-donut-chart"></canvas>
-              <div class="donut-center-overlay">
-                <span class="donut-center-tag" id="donut-center-label">TOTAL KELUAR</span>
-                <span class="donut-center-val money-val" id="donut-center-total">Rp 0</span>
-              </div>
-            </div>
-            <div class="donut-legend-grid" id="donut-legend-list"></div>
-          </div>
-        </div>
-
-        <!-- BAR CHART: TREN ARUS KAS HARIAN -->
-        <div class="neu-card chart-card reveal-card" style="--i: 4">
-          <div class="card-header-inline">
-            <span class="mono-tag">TREN ARUS KAS HARIAN</span>
-            <span class="mono-tag" id="rep-chart-legend">Masuk vs Keluar</span>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="cashflow-chart"></canvas>
-          </div>
-        </div>
-
-        <!-- TOP 3 POS BOCOR -->
-        <div class="section-head reveal-card" style="--i: 5">
-          <h2>Top 3 Pos Bocor</h2>
-        </div>
-        <div class="neu-card list-card reveal-card" style="--i: 6" id="rep-top-leaks"></div>
-
-        <!-- FULL MONTH LEDGER & EXPORT -->
-        <div class="section-head reveal-card" style="--i: 7">
-          <h2>Semua Transaksi Periode Ini</h2>
-          <div class="action-row-sm">
-            <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-export-csv">CSV</button>
-            <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-print-pdf">Cetak PDF</button>
-          </div>
-        </div>
-
-        <!-- SEARCH & FILTER BAR -->
-        <div class="search-filter-box reveal-card" style="--i: 8">
-          <input type="search" id="rep-search-input" class="neu-input compact" placeholder="Cari catatan, kategori, atau dompet..." />
-          <div class="filter-pills-row">
-            <button type="button" class="filter-chip active" data-filter-type="all">Semua</button>
-            <button type="button" class="filter-chip" data-filter-type="expense">Keluar</button>
-            <button type="button" class="filter-chip" data-filter-type="income">Masuk</button>
-            <button type="button" class="filter-chip" data-filter-type="transfer">Transfer</button>
-            <button type="button" class="filter-chip" data-filter-type="savings">Tabungan</button>
-          </div>
-        </div>
-
-        <div class="neu-card list-card reveal-card" style="--i: 9" id="rep-full-tx-list"></div>
-      </section>
-
-      <!-- TAB 4: ALAT PINTAR & PENGATURAN -->
-      <section id="view-tools" class="tab-view">
-        <!-- RECURRING BILLS -->
-        <div class="section-head top-section reveal-card" style="--i: 0" id="section-recurring-bills">
-          <div>
-            <h2>Tagihan Rutin</h2>
-            <p class="section-desc">Ketuk Bayar untuk catat otomatis, atau ✎ untuk edit.</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-bill-modal">+ Tagihan</button>
-        </div>
-        <div id="tools-bill-list" class="stack-list reveal-card" style="--i: 1"></div>
-
-        <!-- WISHLIST COOLDOWN -->
-        <div class="section-head reveal-card" style="--i: 2">
-          <div>
-            <h2>Wishlist Cooldown (7 Hari)</h2>
-            <p class="section-desc">Tahan belanja impulsif dengan jeda wajib 7 hari.</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-wish-modal">+ Incaran</button>
-        </div>
-        <div id="tools-wish-list" class="stack-list reveal-card" style="--i: 3"></div>
-
-        <!-- MANAGE WALLETS / ACCOUNTS -->
-        <div class="section-head reveal-card" style="--i: 4" id="section-manage-wallets">
-          <div>
-            <h2>Dompet & Akun</h2>
-            <p class="section-desc">Tambah, rename otomatis, atau hapus akun kas.</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-wallet-modal">+ Dompet</button>
-        </div>
-        <div class="neu-card list-card reveal-card" style="--i: 5" id="tools-wallet-list"></div>
-
-        <!-- MANAGE CATEGORIES -->
-        <div class="section-head reveal-card" style="--i: 6" id="section-manage-categories">
-          <div>
-            <h2>Kategori Transaksi</h2>
-            <p class="section-desc">Sesuaikan pos pengeluaran & pemasukan Anda.</p>
-          </div>
-          <button type="button" class="neu-btn btn-pill-sm morph-pill-btn" id="btn-open-category-modal">+ Kategori</button>
-        </div>
-        <div class="neu-card reveal-card" style="--i: 7">
-          <div class="neu-switch full-switch">
-            <div class="switch-glider" id="cat-switch-glider"></div>
-            <button type="button" class="switch-opt active" data-cat-tab="expense" id="btn-cat-tab-expense">Pengeluaran</button>
-            <button type="button" class="switch-opt" data-cat-tab="income" id="btn-cat-tab-income">Pemasukan</button>
-          </div>
-          <div class="chip-manage-grid" id="tools-category-list"></div>
-        </div>
-
-        <!-- PAYDAY CYCLE, CLOUD SYNC & BACKUP -->
-        <div class="section-head reveal-card" style="--i: 8">
-          <h2>Siklus Gajian & Cloud Sync</h2>
-        </div>
-        <div class="neu-card reveal-card" style="--i: 9">
-          <label class="field-label" for="input-cycle-day">Tanggal Awal Siklus Buku Kas (Payday)</label>
-          <select id="input-cycle-day" class="neu-select full-w"></select>
-          <p class="field-help">Menentukan perhitungan Jatah Aman Harian & Pagu Anggaran (misal mulai tgl 25 setiap bulan).</p>
-
-          <div class="neu-divider"></div>
-
-          <label class="field-label" for="input-gas-url">URL Web App Google Apps Script</label>
-          <input type="url" id="input-gas-url" class="neu-input" placeholder="https://script.google.com/macros/s/.../exec" />
-          <p class="field-help">Tempel URL deployment Web App GAS Anda. Data tetap tersimpan lokal meski tanpa internet.</p>
-          <div class="btn-grid-2">
-            <button type="button" class="neu-btn btn-secondary morph-btn" id="btn-save-gas-url">
-              <span class="btn-label">Simpan URL</span>
-            </button>
-            <button type="button" class="neu-btn btn-accent morph-btn" id="btn-sync-now">
-              <span class="btn-label">Sync Sekarang</span>
-            </button>
-          </div>
-          <div class="sync-meta" id="settings-last-sync">Belum pernah disinkronkan ke cloud.</div>
-
-          <div class="neu-divider"></div>
-
-          <div class="btn-grid-2">
-            <button type="button" class="neu-btn btn-secondary morph-pill-btn" id="btn-backup-json">Ekspor JSON</button>
-            <label class="neu-btn btn-secondary morph-pill-btn" for="input-restore-json" style="cursor:pointer">Impor JSON</label>
-            <input type="file" id="input-restore-json" accept=".json" class="hidden" />
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- PRINT-ONLY RECEIPT TEMPLATE -->
-    <section id="print-receipt-area" class="print-only">
-      <div class="receipt-box">
-        <h2>KASAKU — REKAPITULASI BULANAN</h2>
-        <p id="print-period-text">Periode: -</p>
-        <div class="receipt-line"></div>
-        <div id="print-summary-rows"></div>
-        <div class="receipt-line"></div>
-        <h3>Rincian Transaksi</h3>
-        <table class="receipt-table" id="print-tx-table">
-          <thead>
-            <tr>
-              <th>Tanggal</th>
-              <th>Kategori</th>
-              <th>Catatan</th>
-              <th>Dompet</th>
-              <th style="text-align:right">Nominal</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div class="receipt-line"></div>
-        <p class="receipt-footer">Dicetak otomatis dari aplikasi KASAKU</p>
       </div>
     </section>
 
-    <!-- FLOATING NEUMORPHIC BOTTOM NAVIGATION BAR -->
-    <nav class="bottom-nav no-print" aria-label="Navigasi Utama">
-      <button type="button" class="nav-item active" data-tab="view-home">
-        <div class="nav-icon-wrap">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
-        </div>
-        <span>Beranda</span>
-      </button>
-      <button type="button" class="nav-item" data-tab="view-budget">
-        <div class="nav-icon-wrap">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
-        </div>
-        <span>Anggaran</span>
-      </button>
-      <button type="button" class="nav-fab liquid-fab" id="btn-open-tx-modal" aria-label="Catat Transaksi Baru">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
-      <button type="button" class="nav-item" data-tab="view-report">
-        <div class="nav-icon-wrap">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-        </div>
-        <span>Laporan</span>
-      </button>
-      <button type="button" class="nav-item" data-tab="view-tools">
-        <div class="nav-icon-wrap">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
-        </div>
-        <span>Alat</span>
-      </button>
-    </nav>
-  </div>
+    <!-- TAB 2: TRANSAKSI -->
+    <section id="tab-transactions" class="tab-section">
+      <div class="neu-card">
+        <h3 id="txFormTitle" style="margin:0 0 14px; font-size:16px;">Catat Transaksi Baru</h3>
+        <form id="transactionForm">
+          <input type="hidden" id="txId">
 
-  <!-- MODAL 1: QUICK-ENTRY TRANSACTION (EXPENSE / INCOME / TRANSFER) -->
-  <div class="modal-backdrop no-print" id="modal-tx" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <div class="neu-switch tri-switch">
-          <div class="switch-glider expense" id="tx-switch-glider"></div>
-          <button type="button" class="switch-opt active" data-tx-type="expense" id="btn-type-expense">Keluar</button>
-          <button type="button" class="switch-opt" data-tx-type="income" id="btn-type-income">Masuk</button>
-          <button type="button" class="switch-opt" data-tx-type="transfer" id="btn-type-transfer">Transfer</button>
-        </div>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-tx" aria-label="Tutup">✕</button>
-      </div>
-
-      <div class="numpad-display-box neu-inset">
-        <span class="currency-prefix">Rp</span>
-        <span class="numpad-value" id="numpad-display">0</span>
-      </div>
-
-      <!-- QUICK CHIP ADDERS -->
-      <div class="quick-chips">
-        <button type="button" class="neu-btn chip-add" data-add-val="10000">+10rb</button>
-        <button type="button" class="neu-btn chip-add" data-add-val="25000">+25rb</button>
-        <button type="button" class="neu-btn chip-add" data-add-val="50000">+50rb</button>
-        <button type="button" class="neu-btn chip-add" data-add-val="100000">+100rb</button>
-      </div>
-
-      <!-- STANDARD CATEGORY & WALLET SELECTORS -->
-      <div class="form-compact-grid" id="tx-standard-fields">
-        <div>
-          <label class="field-label-xs" for="tx-category">Kategori</label>
-          <select id="tx-category" class="neu-select full-w"></select>
-        </div>
-        <div>
-          <label class="field-label-xs" for="tx-wallet">Dompet</label>
-          <select id="tx-wallet" class="neu-select full-w"></select>
-        </div>
-      </div>
-
-      <!-- TRANSFER WALLET-TO-WALLET FIELDS -->
-      <div id="tx-transfer-fields" class="hidden">
-        <div class="form-compact-grid">
-          <div>
-            <label class="field-label-xs" for="tx-from-wallet">Dari Dompet</label>
-            <select id="tx-from-wallet" class="neu-select full-w"></select>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+            <button type="button" id="btnTypeExpense" class="neu-btn active" data-type="expense">Pengeluaran</button>
+            <button type="button" id="btnTypeIncome" class="neu-btn" data-type="income">Pemasukan</button>
           </div>
-          <div>
-            <label class="field-label-xs" for="tx-to-wallet">Ke Dompet</label>
-            <select id="tx-to-wallet" class="neu-select full-w"></select>
-          </div>
-        </div>
-        <div class="form-compact-grid align-center mb-8">
-          <label class="field-label-xs" for="tx-transfer-fee">Biaya Admin (Opsional)</label>
-          <input type="number" id="tx-transfer-fee" class="neu-input compact" placeholder="0" min="0" />
-        </div>
-      </div>
+          <input type="hidden" id="txType" value="expense">
 
-      <div class="form-compact-grid">
-        <div>
-          <label class="field-label-xs" for="tx-date">Tanggal</label>
-          <input type="date" id="tx-date" class="neu-input compact" />
-        </div>
-        <div>
-          <label class="field-label-xs" for="tx-note">Catatan</label>
-          <input type="text" id="tx-note" class="neu-input compact" placeholder="Kopi pagi, bensin..." maxlength="60" />
-        </div>
-      </div>
+          <input id="txTitle" type="text" class="neu-input" placeholder="Keterangan (misal: Kopi V60, Bensin, Gaji)" required>
+          <input id="txAmount" type="number" class="neu-input" placeholder="Nominal (Rp)" min="1" step="any" required>
 
-      <!-- IN-APP TACTILE NEUMORPHIC NUMPAD -->
-      <div class="numpad-grid">
-        <button type="button" class="pad-key" data-key="1">1</button>
-        <button type="button" class="pad-key" data-key="2">2</button>
-        <button type="button" class="pad-key" data-key="3">3</button>
-        <button type="button" class="pad-key pad-fn" data-key="CLEAR">C</button>
-
-        <button type="button" class="pad-key" data-key="4">4</button>
-        <button type="button" class="pad-key" data-key="5">5</button>
-        <button type="button" class="pad-key" data-key="6">6</button>
-        <button type="button" class="pad-key pad-fn" data-key="BACK">⌫</button>
-
-        <button type="button" class="pad-key" data-key="7">7</button>
-        <button type="button" class="pad-key" data-key="8">8</button>
-        <button type="button" class="pad-key" data-key="9">9</button>
-        <button type="button" class="pad-key pad-fn" data-key="000">000</button>
-
-        <button type="button" class="pad-key" data-key="0">0</button>
-        <button type="button" class="pad-key pad-save morph-btn" id="btn-save-tx">
-          <span class="btn-label">SIMPAN TRANSAKSI</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL 2: ATUR / EDIT POS ANGGARAN -->
-  <div class="modal-backdrop no-print" id="modal-budget" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-budget-title">Atur Batas Anggaran</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-budget">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="budget-cat-select">Kategori Pengeluaran</label>
-          <select id="budget-cat-select" class="neu-select full-w"></select>
-        </div>
-        <div>
-          <label class="field-label" for="budget-limit-input">Batas Maksimal per Siklus (Rp)</label>
-          <input type="number" id="budget-limit-input" class="neu-input" placeholder="1500000" min="0" step="10000" />
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-budget">
-          <span class="btn-label">Simpan Pos Anggaran</span>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL 3: TAMBAH / EDIT TAGIHAN RUTIN -->
-  <div class="modal-backdrop no-print" id="modal-bill" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-bill-title">Tambah Tagihan Rutin</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-bill">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="bill-name">Nama Tagihan</label>
-          <input type="text" id="bill-name" class="neu-input" placeholder="Contoh: Internet Wi-Fi / Pajak Motor" />
-        </div>
-        <div class="form-compact-grid">
-          <div>
-            <label class="field-label" for="bill-amount">Nominal (Rp)</label>
-            <input type="number" id="bill-amount" class="neu-input" placeholder="350000" min="0" />
-          </div>
-          <div>
-            <label class="field-label" for="bill-due-day">Tgl Jatuh Tempo</label>
-            <input type="number" id="bill-due-day" class="neu-input" placeholder="20" min="1" max="31" value="15" />
-          </div>
-        </div>
-        <div class="form-compact-grid">
-          <div>
-            <label class="field-label" for="bill-freq-select">Siklus Tagihan</label>
-            <select id="bill-freq-select" class="neu-select full-w">
-              <option value="monthly">Bulanan</option>
-              <option value="yearly">Tahunan</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="bill-wallet">Dompet Bayar</label>
-            <select id="bill-wallet" class="neu-select full-w"></select>
-          </div>
-        </div>
-        <div>
-          <label class="field-label" for="bill-category">Kategori Pengeluaran</label>
-          <select id="bill-category" class="neu-select full-w"></select>
-        </div>
-        <div id="bill-edit-status-wrap" class="hidden">
-          <label class="field-label" for="bill-status-select">Status Periode Ini</label>
-          <select id="bill-status-select" class="neu-select full-w">
-            <option value="unpaid">Belum Lunas</option>
-            <option value="paid">Sudah Lunas (Tanpa Catat Transaksi Ulang)</option>
+          <select id="txCategory" class="neu-select" required>
+            <option value="Makan & Minum">Makan & Minum</option>
+            <option value="Transportasi">Transportasi</option>
+            <option value="Tagihan & Utilitas">Tagihan & Utilitas</option>
+            <option value="Belanja">Belanja</option>
+            <option value="Kesehatan & Gym">Kesehatan & Gym</option>
+            <option value="Gaji & Tunjangan">Gaji & Tunjangan</option>
+            <option value="Lainnya">Lainnya</option>
           </select>
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-bill">
-          <span class="btn-label">Simpan Tagihan</span>
-        </button>
-      </div>
-    </div>
-  </div>
 
-  <!-- MODAL 4: TAMBAH WISHLIST COOLDOWN -->
-  <div class="modal-backdrop no-print" id="modal-wish" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3>Wishlist Cooldown (7 Hari)</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-wish">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="wish-name">Barang / Keinginan</label>
-          <input type="text" id="wish-name" class="neu-input" placeholder="Contoh: Sepatu Lari / TWS Baru" />
-        </div>
-        <div>
-          <label class="field-label" for="wish-price">Estimasi Harga (Rp)</label>
-          <input type="number" id="wish-price" class="neu-input" placeholder="750000" min="0" />
-        </div>
-        <div>
-          <label class="field-label" for="wish-note">Alasan Membeli</label>
-          <input type="text" id="wish-note" class="neu-input" placeholder="Apakah benar-benar butuh sekarang?" />
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-wish">
-          <span class="btn-label">Mulai Hitung Mundur 7 Hari</span>
-        </button>
-      </div>
-    </div>
-  </div>
+          <select id="txWallet" class="neu-select" required>
+            <option value="Tunai">Tunai</option>
+            <option value="Seabank">Seabank</option>
+            <option value="Tabungan Blu">Tabungan Blu</option>
+            <option value="BCA">BCA</option>
+            <option value="Mandiri">Mandiri</option>
+            <option value="BNI">BNI</option>
+          </select>
 
-  <!-- MODAL 5: TAMBAH / RENAME DOMPET & AKUN -->
-  <div class="modal-backdrop no-print" id="modal-wallet" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-wallet-title">Tambah Dompet / Akun</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-wallet">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="wallet-name-input">Nama Dompet / Rekening / E-Wallet</label>
-          <input type="text" id="wallet-name-input" class="neu-input" placeholder="Contoh: BNI, SeaBank, GoPay, Dompet Saku" maxlength="32" />
-          <p class="field-help">Jika mengubah nama dompet lama, seluruh riwayat transaksi terkait akan ikut diperbarui otomatis.</p>
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-wallet">
-          <span class="btn-label">Simpan Dompet</span>
-        </button>
-      </div>
-    </div>
-  </div>
+          <input id="txDate" type="date" class="neu-input" required>
+          <input id="txNote" type="text" class="neu-input" placeholder="Catatan tambahan (opsional)">
 
-  <!-- MODAL 6: TAMBAH / RENAME KATEGORI -->
-  <div class="modal-backdrop no-print" id="modal-category" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-category-title">Tambah Kategori</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-category">✕</button>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" id="txSubmitBtn" class="neu-btn-primary" style="flex:1;">Simpan Transaksi</button>
+            <button type="button" id="txCancelEditBtn" class="neu-btn" style="display:none;">Batal</button>
+          </div>
+        </form>
       </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="category-type-select">Jenis Arus Kas</label>
-          <select id="category-type-select" class="neu-select full-w">
+
+      <div class="neu-card">
+        <h3 style="margin:0 0 12px; font-size:16px;">Riwayat Transaksi</h3>
+        <input id="txSearch" type="search" class="neu-input" placeholder="Cari transaksi...">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <select id="txFilterType" class="neu-select">
+            <option value="all">Semua Jenis</option>
             <option value="expense">Pengeluaran</option>
             <option value="income">Pemasukan</option>
           </select>
+          <select id="txFilterWallet" class="neu-select">
+            <option value="all">Semua Dompet</option>
+          </select>
         </div>
-        <div>
-          <label class="field-label" for="category-name-input">Nama Kategori</label>
-          <input type="text" id="category-name-input" class="neu-input" placeholder="Contoh: Kopi & Ngemil, Cicilan, Freelance" maxlength="32" />
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-category">
-          <span class="btn-label">Simpan Kategori</span>
-        </button>
+        <div id="transactionList"></div>
       </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- MODAL 7: TAMBAH / EDIT TARGET TABUNGAN -->
-  <div class="modal-backdrop no-print" id="modal-goal" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-goal-title">Target Tabungan Baru</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-goal">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="goal-name">Nama Target / Celengan</label>
-          <input type="text" id="goal-name" class="neu-input" placeholder="Contoh: Dana Darurat / Pajak Motor" maxlength="40" />
-        </div>
-        <div class="form-compact-grid">
-          <div>
-            <label class="field-label" for="goal-target">Target Nominal (Rp)</label>
-            <input type="number" id="goal-target" class="neu-input" placeholder="10000000" min="0" step="50000" />
+    <!-- TAB 3: TAGIHAN RUTIN (EDITABLE) -->
+    <section id="tab-bills" class="tab-section">
+      <div class="neu-card">
+        <h3 id="billFormTitle" style="margin:0 0 14px; font-size:16px;">Tambah Tagihan Rutin</h3>
+        <form id="billForm">
+          <input type="hidden" id="billId">
+
+          <input id="billName" type="text" class="neu-input" placeholder="Nama Tagihan (misal: Listrik PLN, WiFi, Cicilan)" required>
+          <input id="billAmount" type="number" class="neu-input" placeholder="Nominal Tagihan (Rp)" min="1" step="any" required>
+
+          <select id="billCategory" class="neu-select" required>
+            <option value="Tagihan & Utilitas">Tagihan & Utilitas</option>
+            <option value="Internet & Pulsa">Internet & Pulsa</option>
+            <option value="Langganan">Langganan</option>
+            <option value="Cicilan">Cicilan</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+
+          <select id="billWallet" class="neu-select" required>
+            <option value="Seabank">Seabank</option>
+            <option value="Tabungan Blu">Tabungan Blu</option>
+            <option value="Tunai">Tunai</option>
+            <option value="BCA">BCA</option>
+            <option value="Mandiri">Mandiri</option>
+            <option value="BNI">BNI</option>
+          </select>
+
+          <label class="label-muted" for="billDueDay">Tanggal Jatuh Tempo Setiap Bulan (1–31)</label>
+          <input id="billDueDay" type="number" class="neu-input" min="1" max="31" placeholder="Contoh: 20" required>
+
+          <div style="display:flex; gap:8px;">
+            <button type="submit" id="billSubmitBtn" class="neu-btn-primary" style="flex:1;">Simpan Tagihan</button>
+            <button type="button" id="billCancelEditBtn" class="neu-btn" style="display:none;">Batal Edit</button>
           </div>
-          <div>
-            <label class="field-label" for="goal-saved">Terkumpul Awal (Rp)</label>
-            <input type="number" id="goal-saved" class="neu-input" placeholder="0" min="0" step="50000" />
-          </div>
-        </div>
-        <div>
-          <label class="field-label" for="goal-deadline">Target Tanggal (Opsional)</label>
-          <input type="date" id="goal-deadline" class="neu-input" />
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-save-goal">
-          <span class="btn-label">Simpan Target</span>
-        </button>
+        </form>
       </div>
-    </div>
+
+      <div class="neu-card">
+        <h3 style="margin:0 0 12px; font-size:16px;">Daftar Tagihan Rutin</h3>
+        <div id="billsList">
+          <p class="label-muted">Belum ada tagihan rutin.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: ALAT & PENGATURAN -->
+    <section id="tab-tools" class="tab-section">
+      <!-- Banner Pengingat Jatuh Tempo Otomatis -->
+      <div id="dueReminderBanner" class="neu-card" style="display:none; border-left:4px solid var(--warning);">
+        <h3 style="margin:0 0 6px; font-size:15px; color:var(--warning);">Pengingat Jatuh Tempo</h3>
+        <div id="dueReminderContent" style="font-size:13px;"></div>
+      </div>
+
+      <!-- Kelola Dompet -->
+      <div class="neu-card">
+        <h3 style="margin:0 0 12px; font-size:16px;">Kelola Dompet</h3>
+        <form id="customWalletForm" style="display:flex; gap:8px; margin-bottom:10px;">
+          <input id="newWalletName" type="text" class="neu-input" placeholder="Nama dompet baru..." style="margin:0; flex:1;" required>
+          <button type="submit" class="neu-btn-primary">Tambah</button>
+        </form>
+        <div id="walletList" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+      </div>
+
+      <!-- Sinkronisasi & Backup -->
+      <div class="neu-card">
+        <h3 style="margin:0 0 10px; font-size:16px;">Sinkronisasi & Cadangan Data</h3>
+        <p id="lastSyncTime" class="label-muted" style="margin-bottom:12px;">Terakhir sinkron: -</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button type="button" id="btnSyncNow" class="neu-btn">Sinkron Cloud</button>
+          <button type="button" id="btnExportJson" class="neu-btn">Ekspor JSON</button>
+        </div>
+        <div style="margin-top:10px;">
+          <label class="neu-btn" style="display:block; text-align:center;">
+            Impor File JSON
+            <input id="importJsonInput" type="file" accept=".json" style="display:none;">
+          </label>
+        </div>
+      </div>
+
+      <!-- Akun Supabase -->
+      <div class="neu-card">
+        <h3 style="margin:0 0 8px; font-size:16px;">Akun Cloud Supabase</h3>
+        <p id="currentUserEmail" class="label-muted" style="margin-bottom:12px;">Belum masuk</p>
+        <button type="button" id="btnLogout" class="neu-btn" style="width:100%; color:var(--danger);">Keluar (Logout)</button>
+      </div>
+    </section>
   </div>
 
-  <!-- MODAL 8: SETOR TABUNGAN (+ NABUNG) -->
-  <div class="modal-backdrop no-print" id="modal-goal-deposit" aria-hidden="true">
-    <div class="bottom-sheet neu-sheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-top">
-        <h3 id="modal-deposit-title">Setor ke Celengan</h3>
-        <button type="button" class="close-sheet-btn neu-btn" data-close-modal="modal-goal-deposit">✕</button>
-      </div>
-      <div class="stack-form">
-        <div>
-          <label class="field-label" for="deposit-amount">Nominal Setoran (Rp)</label>
-          <input type="number" id="deposit-amount" class="neu-input" placeholder="500000" min="0" step="10000" />
-        </div>
-        <div>
-          <label class="field-label" for="deposit-wallet">Sumber Dompet (Opsional)</label>
-          <select id="deposit-wallet" class="neu-select full-w"></select>
-          <p class="field-help">Jika dipilih, saldo dompet akan dipindahkan ke Celengan tanpa dianggap sebagai pengeluaran boros.</p>
-        </div>
-        <button type="button" class="neu-btn btn-accent full-w morph-btn" id="btn-confirm-deposit">
-          <span class="btn-label">Tambah Tabungan</span>
-        </button>
-      </div>
-    </div>
+  <!-- Navigasi Bawah -->
+  <nav class="bottom-nav">
+    <button type="button" class="neu-btn nav-item active" data-target="tab-dashboard">Ringkasan</button>
+    <button type="button" class="neu-btn nav-item" data-target="tab-transactions">Transaksi</button>
+    <button type="button" class="neu-btn nav-item" data-target="tab-bills">Tagihan</button>
+    <button type="button" class="neu-btn nav-item" data-target="tab-tools">Alat</button>
+  </nav>
+
+  <!-- Layar Login Sederhana (Muncul hanya jika belum login) -->
+  <div id="authModal" style="display:none; position:fixed; inset:0; background:#e0e5ec; z-index:9999; align-items:center; justify-content:center; padding:20px;">
+    <form id="loginForm" style="background:#e0e5ec; padding:28px; border-radius:24px; box-shadow:9px 9px 16px #b8bec7, -9px -9px 16px #ffffff; width:100%; max-width:340px;">
+      <h3 style="margin:0 0 16px; text-align:center; color:#2d3748;">Masuk ke KASAKU</h3>
+      <input id="loginEmail" type="email" placeholder="Email Supabase" required style="width:100%; box-sizing:border-box; padding:12px 14px; margin-bottom:12px; border:none; border-radius:12px; background:#e0e5ec; box-shadow:inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff; color:#2d3748; font-size:14px; outline:none;">
+      <input id="loginPass" type="password" placeholder="Password" required style="width:100%; box-sizing:border-box; padding:12px 14px; margin-bottom:16px; border:none; border-radius:12px; background:#e0e5ec; box-shadow:inset 4px 4px 8px #b8bec7, inset -4px -4px 8px #ffffff; color:#2d3748; font-size:14px; outline:none;">
+      <button type="submit" style="width:100%; padding:12px; border:none; border-radius:12px; background:#3182ce; color:#ffffff; font-weight:600; font-size:14px; cursor:pointer; box-shadow:4px 4px 8px #b8bec7, -4px -4px 8px #ffffff;">Masuk</button>
+      <p id="loginError" style="color:#e53e3e; font-size:13px; margin-top:10px; text-align:center; min-height:18px; margin-bottom:0;"></p>
+    </form>
   </div>
 
-  <!-- NEUMORPHIC TOAST NOTIFICATION -->
-  <div id="toast-box" class="toast no-print" role="status"></div>
+  <!-- Pustaka Supabase & Script Aplikasi -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-db.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
