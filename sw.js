@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kasaku-offline-v6';
+const CACHE_NAME = 'kasaku-offline-v5';
 const CORE_ASSETS = [
   './',
   './index.html',
