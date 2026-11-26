@@ -1,11 +1,13 @@
-const CACHE_NAME = 'kasaku-offline-v3';
+const CACHE_NAME = 'kasaku-offline-v5';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.json',
-  '[https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js](https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js)'
+  './icon-192.png',
+  './icon-512.png',
+  'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'
 ];
 
 self.addEventListener('install', (event) => {
