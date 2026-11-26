@@ -7,9 +7,10 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#E6EAF0",
+  "background_color": "#16181F",
   "theme_color": "#E6EAF0",
   "lang": "id-ID",
+  "dir": "ltr",
   "categories": [
     "finance",
     "productivity"
@@ -26,7 +27,28 @@
       "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Catat Transaksi",
+      "short_name": "Catat",
+      "description": "Buka cepat kalkulator catat pengeluaran atau pemasukan",
+      "url": "./index.html?action=new",
+      "icons": [
+        {
+          "src": "./icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "screenshots": [
