@@ -1,6 +1,6 @@
 /**
- * KASAKU v2 — Core Application Logic
- * Flexible Wallets & Categories (Add / Cascade Rename / Delete) + Tactile Motion
+ * KASAKU v3 — Core Application Logic
+ * Editable Recurring Bills, Glassmorphism Motion, Wallet Transfers, Budget Edit & Search
  */
 
 const STORAGE_KEY = 'kasaku_ledger_v1';
@@ -52,6 +52,7 @@ let appState = {
 let currentTxType = 'expense';
 let currentNumpadRaw = '0';
 let editingTxId = null;
+let editingBillId = null;
 let editingWalletOldName = null;
 let editingCategoryState = null; // { type, oldName }
 let activeManageCatTab = 'expense';
@@ -91,9 +92,10 @@ function loadState() {
         ? parsed.wallets
         : [...DEFAULT_WALLETS];
 
-      // Pastikan kategori/dompet dari transaksi lama tidak hilang
+      // Pastikan kategori/dompet dari transaksi lama tetap terdaftar
       txs.forEach((t) => {
         if (t.wallet && !wallets.includes(t.wallet)) wallets.push(t.wallet);
+        if (t.toWallet && !wallets.includes(t.toWallet)) wallets.push(t.toWallet);
         if (t.type === 'expense' && t.category && !expCats.includes(t.category)) expCats.push(t.category);
         if (t.type === 'income' && t.category && !incCats.includes(t.category)) incCats.push(t.category);
       });
@@ -142,7 +144,7 @@ function animateCurrencyRoll(el, startVal, endVal, suffixHTML = '') {
     el.innerHTML = formatIDR(endVal) + suffixHTML;
     return;
   }
-  const duration = 380;
+  const duration = 420;
   const startTime = performance.now();
 
   function step(now) {
@@ -185,7 +187,7 @@ function showToast(msg) {
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(el._timer);
-  el._timer = setTimeout(() => el.classList.remove('show'), 2600);
+  el._timer = setTimeout(() => el.classList.remove('show'), 2700);
 }
 
 function openModal(modalId) {
@@ -216,6 +218,7 @@ function refreshDynamicSelects() {
     .map((w) => `<option value="${escapeHTML(w)}">${escapeHTML(w)}</option>`)
     .join('');
   document.getElementById('tx-wallet').innerHTML = walletOptions;
+  document.getElementById('tx-to-wallet').innerHTML = walletOptions;
   document.getElementById('bill-wallet').innerHTML = walletOptions;
 }
 
@@ -272,7 +275,7 @@ function bindEvents() {
   // Open Transaction Modal
   document.getElementById('btn-open-tx-modal').addEventListener('click', () => openTxModal());
 
-  // Switch Income / Expense inside Tx Modal
+  // Switch Income / Expense / Transfer inside Tx Modal
   document.querySelectorAll('.type-btn[data-tx-type]').forEach((btn) => {
     btn.addEventListener('click', () => setTxType(btn.dataset.txType));
   });
@@ -280,6 +283,28 @@ function bindEvents() {
   // Custom Numpad Keys
   document.querySelectorAll('.pad-key[data-key]').forEach((keyBtn) => {
     keyBtn.addEventListener('click', () => handleNumpadKey(keyBtn.dataset.key));
+  });
+
+  // Physical Keyboard Support when Tx Modal is open
+  document.addEventListener('keydown', (e) => {
+    const txModal = document.getElementById('modal-tx');
+    if (!txModal.classList.contains('open')) return;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      handleNumpadKey(e.key);
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      handleNumpadKey('BACK');
+    } else if (e.key === 'Delete' || e.key === 'Escape') {
+      e.preventDefault();
+      if (e.key === 'Escape') closeModal('modal-tx');
+      else handleNumpadKey('CLEAR');
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      saveTransactionFromModal();
+    }
   });
 
   // Quick Chip Adders
@@ -324,26 +349,19 @@ function bindEvents() {
   document.getElementById('btn-save-category').addEventListener('click', saveCategoryForm);
 
   // Budget Modal
-  document.getElementById('btn-open-budget-modal').addEventListener('click', () => {
-    refreshDynamicSelects();
-    document.getElementById('budget-limit-input').value = '';
-    openModal('modal-budget');
-  });
+  document.getElementById('btn-open-budget-modal').addEventListener('click', () => openBudgetModal());
   document.getElementById('btn-save-budget').addEventListener('click', saveBudgetEnvelope);
 
-  // Report Filters & Exports
+  // Report Filters, Search & Exports
   document.getElementById('report-month-select').addEventListener('change', renderReportView);
   document.getElementById('report-year-select').addEventListener('change', renderReportView);
+  document.getElementById('rep-search-input').addEventListener('input', renderReportView);
+  document.getElementById('rep-type-filter').addEventListener('change', renderReportView);
   document.getElementById('btn-export-csv').addEventListener('click', exportMonthlyCSV);
   document.getElementById('btn-print-pdf').addEventListener('click', printMonthlyReceipt);
 
-  // Recurring Bills Modal
-  document.getElementById('btn-open-bill-modal').addEventListener('click', () => {
-    refreshDynamicSelects();
-    document.getElementById('bill-name').value = '';
-    document.getElementById('bill-amount').value = '';
-    openModal('modal-bill');
-  });
+  // Recurring Bills Modal (Create & Edit)
+  document.getElementById('btn-open-bill-modal').addEventListener('click', () => openBillModal());
   document.getElementById('btn-save-bill').addEventListener('click', saveRecurringBill);
 
   // Wishlist Modal
@@ -388,7 +406,7 @@ function applyTheme(theme) {
   const isDark = theme === 'dark';
   document.getElementById('icon-moon').classList.toggle('hidden', isDark);
   document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
-  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#111215' : '#F4F1EA');
+  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#080B11' : '#EBF0F5');
 }
 
 function applyPrivacy(enabled) {
@@ -438,9 +456,9 @@ function saveWalletForm() {
     const idx = appState.wallets.indexOf(editingWalletOldName);
     if (idx !== -1) {
       appState.wallets[idx] = newName;
-      // Cascade rename ke seluruh transaksi & tagihan
       appState.transactions.forEach((t) => {
         if (t.wallet === editingWalletOldName) t.wallet = newName;
+        if (t.toWallet === editingWalletOldName) t.toWallet = newName;
       });
       appState.bills.forEach((b) => {
         if (b.wallet === editingWalletOldName) b.wallet = newName;
@@ -462,7 +480,7 @@ function deleteWallet(name) {
     return;
   }
 
-  const txCount = appState.transactions.filter((t) => t.wallet === name).length;
+  const txCount = appState.transactions.filter((t) => t.wallet === name || t.toWallet === name).length;
   const msg = txCount > 0
     ? `Dompet "${name}" memiliki ${txCount} transaksi. Hapus dari daftar dompet aktif? (Riwayat transaksi lama tetap aman).`
     : `Hapus dompet "${name}"?`;
@@ -560,7 +578,7 @@ function deleteCategory(type, name) {
 }
 
 /* =========================================================
-   TRANSACTION MODAL & CUSTOM NUMPAD
+   TRANSACTION MODAL (EXPENSE / INCOME / WALLET TRANSFER)
    ========================================================= */
 function openTxModal(txToEdit = null) {
   refreshDynamicSelects();
@@ -574,6 +592,15 @@ function openTxModal(txToEdit = null) {
       walletSel.insertAdjacentHTML('beforeend', `<option value="${escapeHTML(txToEdit.wallet)}">${escapeHTML(txToEdit.wallet)}</option>`);
     }
     walletSel.value = txToEdit.wallet;
+
+    if (txToEdit.type === 'transfer' && txToEdit.toWallet) {
+      const toSel = document.getElementById('tx-to-wallet');
+      if (![...toSel.options].some((o) => o.value === txToEdit.toWallet)) {
+        toSel.insertAdjacentHTML('beforeend', `<option value="${escapeHTML(txToEdit.toWallet)}">${escapeHTML(txToEdit.toWallet)}</option>`);
+      }
+      toSel.value = txToEdit.toWallet;
+    }
+
     document.getElementById('tx-date').value = txToEdit.date;
     document.getElementById('tx-note').value = txToEdit.note || '';
     document.getElementById('btn-save-tx').textContent = 'PERBARUI TRANSAKSI';
@@ -581,6 +608,9 @@ function openTxModal(txToEdit = null) {
     editingTxId = null;
     setTxType('expense');
     currentNumpadRaw = '0';
+    if (appState.wallets.length > 1) {
+      document.getElementById('tx-to-wallet').selectedIndex = 1;
+    }
     document.getElementById('tx-date').value = getTodayISO();
     document.getElementById('tx-note').value = '';
     document.getElementById('btn-save-tx').textContent = 'SIMPAN TRANSAKSI';
@@ -593,15 +623,23 @@ function setTxType(type, preserveCat = null) {
   currentTxType = type;
   document.getElementById('btn-type-expense').classList.toggle('active', type === 'expense');
   document.getElementById('btn-type-income').classList.toggle('active', type === 'income');
+  document.getElementById('btn-type-transfer').classList.toggle('active', type === 'transfer');
 
-  const list = [...(appState.categories[type] || [])];
-  if (preserveCat && !list.includes(preserveCat)) list.push(preserveCat);
+  const isTransfer = type === 'transfer';
+  document.getElementById('tx-category-group').classList.toggle('hidden', isTransfer);
+  document.getElementById('tx-to-wallet-group').classList.toggle('hidden', !isTransfer);
+  document.getElementById('tx-wallet-label').textContent = isTransfer ? 'Dari Dompet Asal' : 'Dompet';
 
-  const catSel = document.getElementById('tx-category');
-  catSel.innerHTML = list
-    .map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
-    .join('');
-  if (preserveCat) catSel.value = preserveCat;
+  if (!isTransfer) {
+    const list = [...(appState.categories[type] || [])];
+    if (preserveCat && !list.includes(preserveCat)) list.push(preserveCat);
+
+    const catSel = document.getElementById('tx-category');
+    catSel.innerHTML = list
+      .map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`)
+      .join('');
+    if (preserveCat) catSel.value = preserveCat;
+  }
 }
 
 function handleNumpadKey(key) {
@@ -641,11 +679,23 @@ function saveTransactionFromModal() {
     return;
   }
 
-  const category = document.getElementById('tx-category').value;
   const wallet = document.getElementById('tx-wallet').value;
+  const toWallet = currentTxType === 'transfer' ? document.getElementById('tx-to-wallet').value : '';
+  const category = currentTxType === 'transfer' ? 'Transfer Dompet' : document.getElementById('tx-category').value;
   const date = document.getElementById('tx-date').value || getTodayISO();
   const note = document.getElementById('tx-note').value.trim();
   const nowISO = new Date().toISOString();
+
+  if (currentTxType === 'transfer') {
+    if (appState.wallets.length < 2) {
+      showToast('Tambahkan minimal 2 dompet untuk melakukan transfer.');
+      return;
+    }
+    if (wallet === toWallet) {
+      showToast('Dompet asal dan tujuan tidak boleh sama.');
+      return;
+    }
+  }
 
   if (editingTxId) {
     const idx = appState.transactions.findIndex((t) => t.id === editingTxId);
@@ -656,6 +706,7 @@ function saveTransactionFromModal() {
         amount,
         category,
         wallet,
+        toWallet,
         date,
         note,
         updatedAt: nowISO
@@ -671,12 +722,13 @@ function saveTransactionFromModal() {
       amount,
       category,
       wallet,
+      toWallet,
       date,
       note,
       updatedAt: nowISO
     });
     lastSavedTxId = newId;
-    showToast('Transaksi tercatat.');
+    showToast(currentTxType === 'transfer' ? 'Transfer saldo tercatat.' : 'Transaksi tercatat.');
   }
 
   closeModal('modal-tx');
@@ -725,6 +777,9 @@ function renderDashboard(isInitial = false) {
       totalIncomeAll += amt;
       if (isThisMonth) monthIncome += amt;
       if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] += amt;
+    } else if (tx.type === 'transfer') {
+      if (walletBalances[tx.wallet] !== undefined) walletBalances[tx.wallet] -= amt;
+      if (tx.toWallet && walletBalances[tx.toWallet] !== undefined) walletBalances[tx.toWallet] += amt;
     } else {
       totalExpenseAll += amt;
       if (isThisMonth) monthExpense += amt;
@@ -760,6 +815,40 @@ function renderDashboard(isInitial = false) {
   document.getElementById('dash-days-left').textContent = `${remainingDays} hari tersisa`;
   document.getElementById('dash-daily-safe').innerHTML = `${formatIDR(dailySafe)}<span class="unit">/hari</span>`;
   document.getElementById('dash-safe-caption').textContent = hintText;
+
+  // Smart Upcoming / Overdue Recurring Bills Alert on Dashboard
+  const todayDay = now.getDate();
+  const dueSoonBills = appState.bills
+    .filter((b) => b.paidPeriod !== ym && b.dueDay - todayDay <= 5)
+    .sort((a, b) => a.dueDay - b.dueDay);
+
+  const alertWrap = document.getElementById('dash-bills-alert-wrap');
+  if (dueSoonBills.length > 0) {
+    const nextBill = dueSoonBills[0];
+    const diff = nextBill.dueDay - todayDay;
+    const dueLabel = diff < 0
+      ? `Terlambat ${Math.abs(diff)} hari`
+      : diff === 0
+        ? 'Jatuh tempo HARI INI'
+        : `Jatuh tempo H-${diff} (tgl ${nextBill.dueDay})`;
+
+    alertWrap.classList.remove('hidden');
+    alertWrap.innerHTML = `
+      <div class="bill-alert-banner">
+        <div>
+          <div class="bill-alert-title">Tagihan: ${escapeHTML(nextBill.name)} (${formatIDR(nextBill.amount)})</div>
+          <div class="bill-alert-sub">${dueLabel} • ${dueSoonBills.length} tagihan belum lunas</div>
+        </div>
+        <button type="button" class="btn-outline-sm" id="btn-dash-pay-bill" data-bill-id="${nextBill.id}">Bayar</button>
+      </div>
+    `;
+    document.getElementById('btn-dash-pay-bill').addEventListener('click', (e) => {
+      payRecurringBill(e.currentTarget.dataset.billId);
+    });
+  } else {
+    alertWrap.classList.add('hidden');
+    alertWrap.innerHTML = '';
+  }
 
   // Render Flexible Wallet Strip
   document.getElementById('dash-wallet-list').innerHTML = appState.wallets
@@ -801,16 +890,22 @@ function renderDashboard(isInitial = false) {
 
 function buildTxRowHTML(tx) {
   const isInc = tx.type === 'income';
-  const sign = isInc ? '+' : '-';
-  const cls = isInc ? 'text-income' : 'text-expense';
+  const isTransfer = tx.type === 'transfer';
+  const sign = isTransfer ? '⇄ ' : isInc ? '+' : '-';
+  const cls = isTransfer ? 'text-transfer' : isInc ? 'text-income' : 'text-expense';
   const noteStr = tx.note ? ` • ${escapeHTML(tx.note)}` : '';
   const flashClass = tx.id === lastSavedTxId ? 'flash-new' : '';
+
+  const walletStr = isTransfer
+    ? `${escapeHTML(tx.wallet)} → ${escapeHTML(tx.toWallet || '-')}`
+    : escapeHTML(tx.wallet);
+  const titleStr = isTransfer ? 'Transfer Saldo' : escapeHTML(tx.category);
 
   return `
     <div class="tx-row ${flashClass}">
       <div class="tx-left">
-        <span class="tx-cat">${escapeHTML(tx.category)}</span>
-        <span class="tx-meta">${escapeHTML(tx.date)} • ${escapeHTML(tx.wallet)}${noteStr}</span>
+        <span class="tx-cat">${titleStr}</span>
+        <span class="tx-meta">${escapeHTML(tx.date)} • ${walletStr}${noteStr}</span>
       </div>
       <div class="tx-right">
         <span class="tx-amount ${cls} money-val">${sign}${formatIDR(tx.amount)}</span>
@@ -836,8 +931,26 @@ function bindTxRowActions(container) {
 }
 
 /* =========================================================
-   ENVELOPE BUDGETING
+   ENVELOPE BUDGETING (ADD, EDIT & DELETE)
    ========================================================= */
+function openBudgetModal(budgetToEdit = null) {
+  refreshDynamicSelects();
+  const titleEl = document.getElementById('modal-budget-title');
+  const catSel = document.getElementById('budget-cat-select');
+  const limitInput = document.getElementById('budget-limit-input');
+
+  if (budgetToEdit) {
+    titleEl.textContent = `Edit Anggaran: ${budgetToEdit.category}`;
+    catSel.value = budgetToEdit.category;
+    limitInput.value = budgetToEdit.limit;
+  } else {
+    titleEl.textContent = 'Atur Batas Anggaran';
+    limitInput.value = '';
+  }
+  openModal('modal-budget');
+  setTimeout(() => limitInput.focus(), 180);
+}
+
 function saveBudgetEnvelope() {
   const category = document.getElementById('budget-cat-select').value;
   const limit = Number(document.getElementById('budget-limit-input').value) || 0;
@@ -862,6 +975,7 @@ function saveBudgetEnvelope() {
 }
 
 function deleteBudgetEnvelope(category) {
+  if (!confirm(`Hapus pos anggaran "${category}"?`)) return;
   appState.budgets = appState.budgets.filter((b) => b.category !== category);
   showToast(`Pos anggaran ${category} dihapus.`);
   saveState(true);
@@ -915,12 +1029,22 @@ function renderBudgetsView() {
           </div>
           <div class="budget-footer">
             <span class="money-val">${sisaLabel} (${rawPct}%)</span>
-            <button type="button" class="mini-action-btn del" data-del-budget="${escapeHTML(b.category)}">Hapus</button>
+            <div class="action-row-sm">
+              <button type="button" class="mini-action-btn edit" data-edit-budget="${escapeHTML(b.category)}">Edit</button>
+              <button type="button" class="mini-action-btn del" data-del-budget="${escapeHTML(b.category)}">Hapus</button>
+            </div>
           </div>
         </div>
       `;
     })
     .join('');
+
+  listEl.querySelectorAll('[data-edit-budget]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const b = appState.budgets.find((item) => item.category === btn.dataset.editBudget);
+      if (b) openBudgetModal(b);
+    });
+  });
 
   listEl.querySelectorAll('[data-del-budget]').forEach((btn) => {
     btn.addEventListener('click', () => deleteBudgetEnvelope(btn.dataset.delBudget));
@@ -932,7 +1056,7 @@ function renderBudgetsView() {
 }
 
 /* =========================================================
-   MONTHLY RESUME, AUDIT & CHART
+   MONTHLY RESUME, AUDIT, SEARCH & CHART
    ========================================================= */
 function getSelectedPeriodTxs() {
   const m = Number(document.getElementById('report-month-select').value);
@@ -953,7 +1077,7 @@ function renderReportView() {
     const amt = Number(t.amount) || 0;
     if (t.type === 'income') {
       inc += amt;
-    } else {
+    } else if (t.type === 'expense') {
       exp += amt;
       catTotals[t.category] = (catTotals[t.category] || 0) + amt;
     }
@@ -1016,10 +1140,21 @@ function renderReportView() {
       .join('');
   }
 
-  const sorted = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+  // Apply Search & Type Filter on Full Transaction List
+  const query = (document.getElementById('rep-search-input')?.value || '').trim().toLowerCase();
+  const typeFilter = document.getElementById('rep-type-filter')?.value || 'all';
+
+  const filtered = txs.filter((t) => {
+    if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+    if (!query) return true;
+    const hay = `${t.category} ${t.wallet} ${t.toWallet || ''} ${t.note || ''} ${t.date}`.toLowerCase();
+    return hay.includes(query);
+  });
+
+  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
   const fullListEl = document.getElementById('rep-full-tx-list');
   if (sorted.length === 0) {
-    fullListEl.innerHTML = `<div class="empty-state">Tidak ada transaksi di ${MONTH_NAMES[m]} ${y}.</div>`;
+    fullListEl.innerHTML = `<div class="empty-state">Tidak ada transaksi yang cocok di ${MONTH_NAMES[m]} ${y}.</div>`;
   } else {
     fullListEl.innerHTML = sorted.map((t) => buildTxRowHTML(t)).join('');
     bindTxRowActions(fullListEl);
@@ -1041,7 +1176,7 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
     const day = Number(t.date.split('-')[2]) || 0;
     if (day >= 1 && day <= daysCount) {
       if (t.type === 'income') dailyInc[day - 1] += Number(t.amount) || 0;
-      else dailyExp[day - 1] += Number(t.amount) || 0;
+      else if (t.type === 'expense') dailyExp[day - 1] += Number(t.amount) || 0;
     }
   });
 
@@ -1050,8 +1185,8 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
   }
 
   const isDark = appState.settings.theme === 'dark';
-  const gridColor = isDark ? '#2A2D35' : '#E5E0D5';
-  const tickColor = isDark ? '#9CA3AF' : '#64625C';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.08)';
+  const tickColor = isDark ? '#94A3B8' : '#526071';
 
   cashflowChartInstance = new Chart(canvas, {
     type: 'bar',
@@ -1061,14 +1196,14 @@ function renderDailyCashflowChart(monthIdx, year, txs) {
         {
           label: 'Pemasukan',
           data: dailyInc,
-          backgroundColor: isDark ? '#34D399' : '#1E5631',
-          borderRadius: 2
+          backgroundColor: isDark ? '#34D399' : '#0F766E',
+          borderRadius: 4
         },
         {
           label: 'Pengeluaran',
           data: dailyExp,
-          backgroundColor: isDark ? '#F87171' : '#C84B31',
-          borderRadius: 2
+          backgroundColor: isDark ? '#FB7185' : '#D94832',
+          borderRadius: 4
         }
       ]
     },
@@ -1102,14 +1237,18 @@ function exportMonthlyCSV() {
   }
 
   const headers = ['Tanggal', 'Tipe', 'Kategori', 'Dompet', 'Nominal', 'Catatan'];
-  const rows = txs.map((t) => [
-    t.date,
-    t.type === 'income' ? 'Pemasukan' : 'Pengeluaran',
-    `"${(t.category || '').replace(/"/g, '""')}"`,
-    `"${(t.wallet || '').replace(/"/g, '""')}"`,
-    t.amount,
-    `"${(t.note || '').replace(/"/g, '""')}"`
-  ]);
+  const rows = txs.map((t) => {
+    const tipeStr = t.type === 'income' ? 'Pemasukan' : t.type === 'transfer' ? 'Transfer' : 'Pengeluaran';
+    const walletStr = t.type === 'transfer' ? `${t.wallet} -> ${t.toWallet || ''}` : t.wallet;
+    return [
+      t.date,
+      tipeStr,
+      `"${(t.category || '').replace(/"/g, '""')}"`,
+      `"${(walletStr || '').replace(/"/g, '""')}"`,
+      t.amount,
+      `"${(t.note || '').replace(/"/g, '""')}"`
+    ];
+  });
 
   const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -1137,25 +1276,75 @@ function printMonthlyReceipt() {
   const tbody = document.querySelector('#print-tx-table tbody');
   tbody.innerHTML = txs
     .sort((a, b) => a.date.localeCompare(b.date))
-    .map(
-      (t) => `
-      <tr>
-        <td>${escapeHTML(t.date)}</td>
-        <td>${escapeHTML(t.category)}</td>
-        <td>${escapeHTML(t.note || '-')}</td>
-        <td>${escapeHTML(t.wallet)}</td>
-        <td style="text-align:right">${t.type === 'income' ? '+' : '-'}${formatIDR(t.amount)}</td>
-      </tr>
-    `
-    )
+    .map((t) => {
+      const sign = t.type === 'income' ? '+' : t.type === 'transfer' ? '⇄ ' : '-';
+      const wStr = t.type === 'transfer' ? `${t.wallet} → ${t.toWallet || ''}` : t.wallet;
+      return `
+        <tr>
+          <td>${escapeHTML(t.date)}</td>
+          <td>${escapeHTML(t.category)}</td>
+          <td>${escapeHTML(t.note || '-')}</td>
+          <td>${escapeHTML(wStr)}</td>
+          <td style="text-align:right">${sign}${formatIDR(t.amount)}</td>
+        </tr>
+      `;
+    })
     .join('');
 
   window.print();
 }
 
 /* =========================================================
-   TOOLS VIEW: WALLETS, CATEGORIES, RECURRING BILLS & WISHLIST
+   RECURRING BILLS (CREATE, EDIT, PAY & DELETE)
    ========================================================= */
+function openBillModal(billToEdit = null) {
+  refreshDynamicSelects();
+
+  const titleEl = document.getElementById('modal-bill-title');
+  const nameInput = document.getElementById('bill-name');
+  const amountInput = document.getElementById('bill-amount');
+  const dueInput = document.getElementById('bill-due-day');
+  const catSel = document.getElementById('bill-category');
+  const walletSel = document.getElementById('bill-wallet');
+  const paidRow = document.getElementById('bill-paid-row');
+  const paidCheckbox = document.getElementById('bill-paid-checkbox');
+  const saveBtn = document.getElementById('btn-save-bill');
+
+  if (billToEdit) {
+    editingBillId = billToEdit.id;
+    titleEl.textContent = 'Edit Tagihan Rutin';
+    nameInput.value = billToEdit.name;
+    amountInput.value = billToEdit.amount;
+    dueInput.value = billToEdit.dueDay;
+
+    if (![...catSel.options].some((o) => o.value === billToEdit.category)) {
+      catSel.insertAdjacentHTML('beforeend', `<option value="${escapeHTML(billToEdit.category)}">${escapeHTML(billToEdit.category)}</option>`);
+    }
+    catSel.value = billToEdit.category;
+
+    if (![...walletSel.options].some((o) => o.value === billToEdit.wallet)) {
+      walletSel.insertAdjacentHTML('beforeend', `<option value="${escapeHTML(billToEdit.wallet)}">${escapeHTML(billToEdit.wallet)}</option>`);
+    }
+    walletSel.value = billToEdit.wallet;
+
+    paidRow.classList.remove('hidden');
+    paidCheckbox.checked = billToEdit.paidPeriod === getCurrentPeriodYM();
+    saveBtn.textContent = 'Perbarui Tagihan';
+  } else {
+    editingBillId = null;
+    titleEl.textContent = 'Tambah Tagihan Rutin';
+    nameInput.value = '';
+    amountInput.value = '';
+    dueInput.value = '15';
+    paidRow.classList.add('hidden');
+    paidCheckbox.checked = false;
+    saveBtn.textContent = 'Simpan Tagihan';
+  }
+
+  openModal('modal-bill');
+  setTimeout(() => nameInput.focus(), 180);
+}
+
 function saveRecurringBill() {
   const name = document.getElementById('bill-name').value.trim();
   const amount = Number(document.getElementById('bill-amount').value) || 0;
@@ -1168,19 +1357,41 @@ function saveRecurringBill() {
     return;
   }
 
-  appState.bills.push({
-    id: uid('bill'),
-    name,
-    amount,
-    category,
-    wallet,
-    dueDay,
-    paidPeriod: '',
-    updatedAt: new Date().toISOString()
-  });
+  const nowISO = new Date().toISOString();
 
+  if (editingBillId) {
+    const idx = appState.bills.findIndex((b) => b.id === editingBillId);
+    if (idx !== -1) {
+      const isPaidChecked = document.getElementById('bill-paid-checkbox').checked;
+      const currentYM = getCurrentPeriodYM();
+      appState.bills[idx] = {
+        ...appState.bills[idx],
+        name,
+        amount,
+        dueDay,
+        category,
+        wallet,
+        paidPeriod: isPaidChecked ? currentYM : '',
+        updatedAt: nowISO
+      };
+    }
+    showToast(`Tagihan "${name}" diperbarui.`);
+  } else {
+    appState.bills.push({
+      id: uid('bill'),
+      name,
+      amount,
+      category,
+      wallet,
+      dueDay,
+      paidPeriod: '',
+      updatedAt: nowISO
+    });
+    showToast('Tagihan rutin ditambahkan.');
+  }
+
+  editingBillId = null;
   closeModal('modal-bill');
-  showToast('Tagihan rutin ditambahkan.');
   saveState(true);
 }
 
@@ -1213,11 +1424,18 @@ function payRecurringBill(billId) {
 }
 
 function deleteRecurringBill(billId) {
+  const bill = appState.bills.find((b) => b.id === billId);
+  const billName = bill ? bill.name : 'ini';
+  if (!confirm(`Hapus jadwal tagihan rutin "${billName}"?`)) return;
+
   appState.bills = appState.bills.filter((b) => b.id !== billId);
   showToast('Tagihan dihapus.');
   saveState(true);
 }
 
+/* =========================================================
+   WISHLIST COOLDOWN
+   ========================================================= */
 function saveWishlistItem() {
   const name = document.getElementById('wish-name').value.trim();
   const price = Number(document.getElementById('wish-price').value) || 0;
@@ -1278,11 +1496,15 @@ function buyWishlistItem(wishId) {
 }
 
 function deleteWishlistItem(wishId) {
+  if (!confirm('Hapus item ini dari wishlist?')) return;
   appState.wishlist = appState.wishlist.filter((w) => w.id !== wishId);
   showToast('Item wishlist dihapus.');
   saveState(true);
 }
 
+/* =========================================================
+   RENDER TOOLS VIEW
+   ========================================================= */
 function renderCategoryManager() {
   const listEl = document.getElementById('tools-category-list');
   const cats = appState.categories[activeManageCatTab] || [];
@@ -1310,11 +1532,79 @@ function renderCategoryManager() {
 }
 
 function renderToolsView() {
-  // 1. Wallet Manager List
+  // 1. Recurring Bills (With Edit, Pay & Delete)
+  const currentYM = getCurrentPeriodYM();
+  const todayDay = new Date().getDate();
+  const billListEl = document.getElementById('tools-bill-list');
+
+  if (appState.bills.length === 0) {
+    billListEl.innerHTML = `<div class="ledger-card empty-state">Belum ada jadwal tagihan rutin. Tekan <strong>+ Tagihan</strong> untuk menambahkan.</div>`;
+  } else {
+    const sortedBills = [...appState.bills].sort((a, b) => a.dueDay - b.dueDay);
+    billListEl.innerHTML = sortedBills
+      .map((b) => {
+        const isPaid = b.paidPeriod === currentYM;
+        const diffDays = b.dueDay - todayDay;
+        let dueBadgeClass = '';
+        let dueText = `Tgl ${b.dueDay}`;
+
+        if (!isPaid) {
+          if (diffDays < 0) {
+            dueBadgeClass = 'overdue';
+            dueText = `Terlambat ${Math.abs(diffDays)} hr (Tgl ${b.dueDay})`;
+          } else if (diffDays === 0) {
+            dueBadgeClass = 'overdue';
+            dueText = `Hari ini (Tgl ${b.dueDay})`;
+          } else if (diffDays <= 5) {
+            dueBadgeClass = 'soon';
+            dueText = `H-${diffDays} (Tgl ${b.dueDay})`;
+          }
+        }
+
+        return `
+          <div class="ledger-card bill-card-main">
+            <div class="bill-card-top">
+              <div>
+                <div class="tx-cat">${escapeHTML(b.name)}</div>
+                <div class="tx-meta money-val">${formatIDR(b.amount)} • ${escapeHTML(b.category)} • ${escapeHTML(b.wallet)}</div>
+              </div>
+              <span class="due-chip ${dueBadgeClass}">${dueText}</span>
+            </div>
+            <div class="bill-card-bottom">
+              <div class="action-row-sm">
+                <button type="button" class="mini-action-btn edit" data-edit-bill="${b.id}">✎ Edit</button>
+                <button type="button" class="mini-action-btn del" data-del-bill="${b.id}">Hapus</button>
+              </div>
+              ${
+                isPaid
+                  ? `<span class="badge-paid">✓ Lunas Bulan Ini</span>`
+                  : `<button type="button" class="btn-outline-sm" data-pay-bill="${b.id}">Tandai Lunas</button>`
+              }
+            </div>
+          </div>
+        `;
+      })
+      .join('');
+
+    billListEl.querySelectorAll('[data-edit-bill]').forEach((btn) =>
+      btn.addEventListener('click', () => {
+        const bill = appState.bills.find((b) => b.id === btn.dataset.editBill);
+        if (bill) openBillModal(bill);
+      })
+    );
+    billListEl.querySelectorAll('[data-pay-bill]').forEach((btn) =>
+      btn.addEventListener('click', () => payRecurringBill(btn.dataset.payBill))
+    );
+    billListEl.querySelectorAll('[data-del-bill]').forEach((btn) =>
+      btn.addEventListener('click', () => deleteRecurringBill(btn.dataset.delBill))
+    );
+  }
+
+  // 2. Wallet Manager List
   const walletListEl = document.getElementById('tools-wallet-list');
   walletListEl.innerHTML = appState.wallets
     .map((w) => {
-      const txCount = appState.transactions.filter((t) => t.wallet === w).length;
+      const txCount = appState.transactions.filter((t) => t.wallet === w || t.toWallet === w).length;
       return `
         <div class="tx-row">
           <div class="tx-left">
@@ -1337,45 +1627,8 @@ function renderToolsView() {
     btn.addEventListener('click', () => deleteWallet(btn.dataset.delWallet))
   );
 
-  // 2. Category Manager
+  // 3. Category Manager
   renderCategoryManager();
-
-  // 3. Recurring Bills
-  const currentYM = getCurrentPeriodYM();
-  const billListEl = document.getElementById('tools-bill-list');
-
-  if (appState.bills.length === 0) {
-    billListEl.innerHTML = `<div class="ledger-card empty-state">Belum ada jadwal tagihan rutin.</div>`;
-  } else {
-    billListEl.innerHTML = appState.bills
-      .map((b) => {
-        const isPaid = b.paidPeriod === currentYM;
-        return `
-          <div class="ledger-card tool-row">
-            <div>
-              <div class="tx-cat">${escapeHTML(b.name)}</div>
-              <div class="tx-meta money-val">${formatIDR(b.amount)} • Jatuh tempo tgl ${b.dueDay} (${escapeHTML(b.wallet)})</div>
-            </div>
-            <div class="action-row-sm">
-              ${
-                isPaid
-                  ? `<span class="badge-paid">Lunas</span>`
-                  : `<button type="button" class="btn-outline-sm" data-pay-bill="${b.id}">Tandai Lunas</button>`
-              }
-              <button type="button" class="mini-action-btn del" data-del-bill="${b.id}">✕</button>
-            </div>
-          </div>
-        `;
-      })
-      .join('');
-
-    billListEl.querySelectorAll('[data-pay-bill]').forEach((btn) =>
-      btn.addEventListener('click', () => payRecurringBill(btn.dataset.payBill))
-    );
-    billListEl.querySelectorAll('[data-del-bill]').forEach((btn) =>
-      btn.addEventListener('click', () => deleteRecurringBill(btn.dataset.delBill))
-    );
-  }
 
   // 4. Wishlist Cooldown List
   const wishListEl = document.getElementById('tools-wish-list');
