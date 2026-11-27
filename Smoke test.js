@@ -125,6 +125,21 @@ t('anggaran rusak dibersihkan', () => {
   assert.strictEqual(b.length, 1); assert.strictEqual(b[0].limit, 1); assert.strictEqual(b[0].id, 'b1');
 });
 
+// ---- Total anggaran = jumlah anggaran kategori
+t('total anggaran = jumlah batas kategori, terpakai hanya kategori beranggaran', () => {
+  const e = makeEnv({});
+  assert.strictEqual(e.el('budgetUsageText').textContent, 'Belum ada anggaran');
+  setBudget(e, '', 'Makan & Kopi', 100000);      // terpakai seed: 35.000
+  setBudget(e, '', 'Transport & BBM', 200000);   // terpakai seed: 120.000
+  assert.strictEqual(e.el('budgetTotalText').textContent, 'Rp 300.000');
+  assert.strictEqual(e.el('budgetUsageText').textContent, 'Rp 155.000 / Rp 300.000'); // belanja 245rb di luar anggaran tidak dihitung
+  assert.ok(/Sisa Rp 145\.000/.test(e.el('budgetTotalHint').textContent), e.el('budgetTotalHint').textContent);
+  click(e, '[data-delete-budget]', { deleteBudget: stored(e).budgets[0].id });
+  click(e, '[data-delete-budget]', { deleteBudget: stored(e).budgets[0].id });
+  assert.strictEqual(e.el('budgetUsageText').textContent, 'Belum ada anggaran');
+  assert.ok(!('monthlyBudget' in stored(e)));
+});
+
 // ---- Target tabungan: edit & hapus
 t('edit target tabungan mengubah, bukan menambah', () => {
   const n = stored(env).goals.length;
