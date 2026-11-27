@@ -1,7 +1,7 @@
 {
   "name": "KASAKU - Manajemen Keuangan",
   "short_name": "KASAKU",
-  "description": "Aplikasi pencatatan keuangan pribadi, multi-dompet, dan tagihan rutin",
+  "description": "Aplikasi laporan keuangan interaktif, numpad otomatis, multi-dompet, dan tagihan rutin",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
