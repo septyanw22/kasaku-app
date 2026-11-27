@@ -1,7 +1,12 @@
 /**
- * KASAKU v4 — Core Application Logic
- * Upgrades: Bill-Aware Sisa Napas, 1-Tap Quick Templates, Dual-Cycle Reports,
- * Bar/Doughnut Morph Chart Switcher, Cloud Pull/Push, & Liquid Morphing Engine
+ * KASAKU v5 — Core Application Logic (Neon Glass Morph Edition)
+ * Fixes & Upgrades:
+ * - Full Cloud Sync parity (includes templates & cycleStartDay)
+ * - Double-tap race guard on Recurring Bills & Form Submitters
+ * - Cascade category rename across transactions, budgets, bills, AND templates
+ * - O(1) Map-based Chart daily aggregation & Neon Chart.js palette
+ * - End-of-cycle Runway Forecast, 1-Tap Quick Date Pills, & 1-Tap Duplicate Tx
+ * - Global Escape key modal handler & Safe Local Data Reset
  */
 
 const STORAGE_KEY = 'kasaku_ledger_v1';
@@ -53,7 +58,7 @@ let appState = {
   wallets: [...DEFAULT_WALLETS],
   settings: {
     gasUrl: '',
-    theme: 'light',
+    theme: 'dark',
     privacyMode: false,
     lastSync: '',
     cycleStartDay: 1
@@ -141,7 +146,7 @@ function loadState() {
         wallets,
         settings: {
           gasUrl: parsed.settings?.gasUrl || '',
-          theme: parsed.settings?.theme || 'light',
+          theme: parsed.settings?.theme || 'dark',
           privacyMode: Boolean(parsed.settings?.privacyMode),
           lastSync: parsed.settings?.lastSync || '',
           cycleStartDay: Math.min(28, Math.max(1, Number(parsed.settings?.cycleStartDay) || 1))
@@ -182,6 +187,12 @@ function getTodayISO() {
   return toISODate(new Date());
 }
 
+function getYesterdayISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return toISODate(d);
+}
+
 function getCurrentPeriodYM() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -207,11 +218,13 @@ function getActiveCycleInfo() {
   }
 
   const msPerDay = 1000 * 60 * 60 * 24;
+  const elapsedDays = Math.max(1, Math.round((today - startDate) / msPerDay) + 1);
   const remainingDays = Math.max(1, Math.round((endDate - today) / msPerDay) + 1);
 
   return {
     startISO: toISODate(startDate),
     endISO: toISODate(endDate),
+    elapsedDays,
     remainingDays,
     isCustomCycle: startDay !== 1
   };
@@ -240,6 +253,9 @@ function triggerButtonMorph(btnEl, successLabel = 'Tersimpan', callback = null) 
     if (callback) callback();
     return;
   }
+  if (btnEl.dataset.morphBusy === '1') return;
+  btnEl.dataset.morphBusy = '1';
+
   const labelSpan = btnEl.querySelector('.btn-label') || btnEl;
   const originalHTML = labelSpan.innerHTML;
 
@@ -257,8 +273,9 @@ function triggerButtonMorph(btnEl, successLabel = 'Tersimpan', callback = null) 
   setTimeout(() => {
     btnEl.classList.remove('is-morphing', 'is-success');
     labelSpan.innerHTML = originalHTML;
+    btnEl.dataset.morphBusy = '0';
     if (callback) callback();
-  }, 680);
+  }, 660);
 }
 
 function animateCurrencyRoll(el, startVal, endVal) {
@@ -267,7 +284,7 @@ function animateCurrencyRoll(el, startVal, endVal) {
     el.textContent = formatIDR(endVal);
     return;
   }
-  const duration = 400;
+  const duration = 420;
   const startTime = performance.now();
 
   function step(now) {
@@ -314,6 +331,10 @@ function closeModal(modalId) {
   el.classList.remove('open');
   el.setAttribute('aria-hidden', 'true');
   if (modalId === 'modal-tx') document.body.classList.remove('tx-sheet-open');
+}
+
+function closeAllModals() {
+  document.querySelectorAll('.modal-backdrop.open').forEach((m) => closeModal(m.id));
 }
 
 /* =========================================================
@@ -369,7 +390,10 @@ function initSelectors() {
 function bindEvents() {
   // Bottom Tab Navigation
   document.querySelectorAll('.nav-item').forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      switchTab(btn.dataset.tab);
+    });
   });
 
   document.getElementById('btn-see-all-tx').addEventListener('click', () => switchTab('view-report'));
@@ -388,6 +412,7 @@ function bindEvents() {
 
   // Theme & Privacy
   document.getElementById('btn-theme-toggle').addEventListener('click', () => {
+    triggerHaptic(10);
     const next = appState.settings.theme === 'light' ? 'dark' : 'light';
     appState.settings.theme = next;
     applyTheme(next);
@@ -395,6 +420,7 @@ function bindEvents() {
   });
 
   document.getElementById('btn-privacy-toggle').addEventListener('click', () => {
+    triggerHaptic(10);
     appState.settings.privacyMode = !appState.settings.privacyMode;
     applyPrivacy(appState.settings.privacyMode);
     saveState(false);
@@ -413,12 +439,24 @@ function bindEvents() {
     }
   });
 
+  // Quick Date Pills inside Transaction Modal
+  document.querySelectorAll('[data-quick-date]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      document.getElementById('tx-date').value =
+        btn.dataset.quickDate === 'yesterday' ? getYesterdayISO() : getTodayISO();
+    });
+  });
+
   // Save current modal input as 1-tap template
   document.getElementById('btn-save-as-template').addEventListener('click', saveCurrentAsTemplate);
 
   // Switch Expense / Income / Transfer inside Tx Modal
   document.querySelectorAll('[data-tx-type]').forEach((btn) => {
-    btn.addEventListener('click', () => setTxType(btn.dataset.txType));
+    btn.addEventListener('click', () => {
+      triggerHaptic(8);
+      setTxType(btn.dataset.txType);
+    });
   });
 
   // Custom Numpad Keys
@@ -440,16 +478,25 @@ function bindEvents() {
     });
   });
 
-  // Physical Keyboard Support when Tx Modal is Open
+  // Sanitize numeric inputs against exponential 'e', '+', '-'
+  document.querySelectorAll('input[type="number"]').forEach((inp) => {
+    inp.addEventListener('keydown', (e) => {
+      if (['e', 'E', '+', '-'].includes(e.key)) e.preventDefault();
+    });
+  });
+
+  // Global Keyboard Support (Escape closes any open modal + Numpad shortcuts)
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeAllModals();
+      return;
+    }
+
     const txModalOpen = document.getElementById('modal-tx').classList.contains('open');
     if (!txModalOpen) return;
 
     const activeTag = document.activeElement?.tagName;
-    if (activeTag === 'INPUT' || activeTag === 'SELECT') {
-      if (e.key === 'Escape') closeModal('modal-tx');
-      return;
-    }
+    if (activeTag === 'INPUT' || activeTag === 'SELECT') return;
 
     if (/^[0-9]$/.test(e.key)) {
       e.preventDefault();
@@ -466,8 +513,6 @@ function bindEvents() {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       saveTransactionFromModal();
-    } else if (e.key === 'Escape') {
-      closeModal('modal-tx');
     }
   });
 
@@ -499,6 +544,7 @@ function bindEvents() {
 
   document.querySelectorAll('[data-rep-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      triggerHaptic(8);
       reportPeriodMode = btn.dataset.repMode;
       document.getElementById('btn-rep-mode-calendar').classList.toggle('active', reportPeriodMode === 'calendar');
       document.getElementById('btn-rep-mode-cycle').classList.toggle('active', reportPeriodMode === 'cycle');
@@ -510,6 +556,7 @@ function bindEvents() {
 
   document.querySelectorAll('[data-chart-mode]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      triggerHaptic(8);
       reportChartMode = btn.dataset.chartMode;
       document.getElementById('btn-chart-bar').classList.toggle('active', reportChartMode === 'bar');
       document.getElementById('btn-chart-doughnut').classList.toggle('active', reportChartMode === 'doughnut');
@@ -527,6 +574,7 @@ function bindEvents() {
   });
   document.querySelectorAll('[data-filter-type]').forEach((chip) => {
     chip.addEventListener('click', () => {
+      triggerHaptic(8);
       reportFilterType = chip.dataset.filterType;
       document.querySelectorAll('[data-filter-type]').forEach((c) => c.classList.remove('active'));
       chip.classList.add('active');
@@ -556,6 +604,7 @@ function bindEvents() {
   // Category Management Tabs & Modal
   document.querySelectorAll('[data-cat-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
+      triggerHaptic(8);
       setManageCatTab(btn.dataset.catTab);
       renderCategoryManager();
     });
@@ -592,6 +641,8 @@ function bindEvents() {
 
   document.getElementById('btn-backup-json').addEventListener('click', exportBackupJSON);
   document.getElementById('input-restore-json').addEventListener('change', importBackupJSON);
+
+  document.getElementById('btn-reset-local-data').addEventListener('click', resetLocalDeviceData);
 }
 
 function flashNumpadKey(key) {
@@ -615,7 +666,7 @@ function applyTheme(theme) {
   const isDark = theme === 'dark';
   document.getElementById('icon-moon').classList.toggle('hidden', isDark);
   document.getElementById('icon-sun').classList.toggle('hidden', !isDark);
-  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#181A20' : '#E6EAF0');
+  document.getElementById('meta-theme-color').setAttribute('content', isDark ? '#060811' : '#EEF2FB');
   if (document.getElementById('view-report')?.classList.contains('active')) {
     renderReportView();
   }
@@ -650,7 +701,7 @@ function renderQuickTemplates() {
   strip.innerHTML = matching
     .map(
       (t) => `
-        <button type="button" class="neu-btn tpl-chip" data-apply-tpl="${t.id}">
+        <button type="button" class="glass-btn tpl-chip" data-apply-tpl="${t.id}">
           <span>${escapeHTML(t.label)}</span>
           <span class="tpl-del-x" data-del-tpl="${t.id}" title="Hapus template">✕</span>
         </button>
@@ -663,7 +714,7 @@ function renderQuickTemplates() {
       if (e.target.dataset.delTpl) {
         e.stopPropagation();
         appState.templates = appState.templates.filter((item) => item.id !== e.target.dataset.delTpl);
-        saveState(false);
+        saveState(true);
         renderQuickTemplates();
         showToast('Template dihapus.');
         return;
@@ -706,13 +757,14 @@ function saveCurrentAsTemplate() {
   });
   if (appState.templates.length > 10) appState.templates.pop();
 
-  saveState(false);
+  triggerButtonMorph(document.getElementById('btn-save-as-template'), 'Disematkan');
+  saveState(true);
   renderQuickTemplates();
   showToast(`Template "${label}" disematkan.`);
 }
 
 /* =========================================================
-   WALLET & CATEGORY CRUD (WITH CASCADE RENAME)
+   WALLET & CATEGORY CRUD (WITH FULL CASCADE RENAME)
    ========================================================= */
 function openWalletModal(oldName = null) {
   editingWalletOldName = oldName;
@@ -846,6 +898,9 @@ function saveCategoryForm() {
       list[idx] = newName;
       appState.transactions.forEach((t) => {
         if (t.type === type && t.category === oldName) t.category = newName;
+      });
+      appState.templates.forEach((tpl) => {
+        if (tpl.type === type && tpl.category === oldName) tpl.category = newName;
       });
       if (type === 'expense') {
         appState.budgets.forEach((b) => {
@@ -1042,6 +1097,22 @@ function saveTransactionFromModal() {
   });
 }
 
+function duplicateTransaction(id) {
+  const src = appState.transactions.find((t) => t.id === id);
+  if (!src) return;
+  const newId = uid('tx');
+  appState.transactions.push({
+    ...src,
+    id: newId,
+    date: getTodayISO(),
+    updatedAt: new Date().toISOString()
+  });
+  lastSavedTxId = newId;
+  triggerHaptic(12);
+  showToast(`Transaksi "${src.category}" diduplikasi ke hari ini.`);
+  saveState(true);
+}
+
 function deleteTransaction(id) {
   if (!confirm('Hapus transaksi ini dari catatan?')) return;
   appState.transactions = appState.transactions.filter((t) => t.id !== id);
@@ -1133,6 +1204,15 @@ function renderDashboard(isInitial = false) {
   document.getElementById('dash-daily-safe').innerHTML = `${formatIDR(dailySafe)}<span class="unit">/hari</span>`;
   document.getElementById('dash-safe-caption').textContent = hintText;
 
+  // Proyeksi Akhir Siklus berdasarkan burn rate aktual harian
+  const avgDailyBurn = cycleExpense / cycle.elapsedDays;
+  const projectedRemainingSpend = avgDailyBurn * Math.max(0, cycle.remainingDays - 1);
+  const projectedEndBalance = netBalance - projectedRemainingSpend - unpaidBillsTotal;
+  const runwayEl = document.getElementById('dash-runway-forecast');
+  if (runwayEl) {
+    runwayEl.textContent = `Proyeksi akhir siklus: ${formatIDR(projectedEndBalance)} (rata-rata keluar ${formatIDR(avgDailyBurn)}/hr)`;
+  }
+
   // Due Recurring Bills Alert Banner
   renderDashboardDueBills();
 
@@ -1151,7 +1231,7 @@ function renderDashboard(isInitial = false) {
   // Mini Savings Goals Strip
   const goalsStripEl = document.getElementById('dash-goals-strip');
   if (appState.goals.length === 0) {
-    goalsStripEl.innerHTML = `<div class="neu-card empty-state" style="width:100%">Belum ada target tabungan. Klik <strong>+ Target</strong> untuk mulai menabung terarah.</div>`;
+    goalsStripEl.innerHTML = `<div class="glass-card empty-state" style="width:100%">Belum ada target tabungan. Klik <strong>+ Target</strong> untuk mulai menabung terarah.</div>`;
   } else {
     goalsStripEl.innerHTML = appState.goals
       .map((g) => {
@@ -1163,7 +1243,7 @@ function renderDashboard(isInitial = false) {
               <span class="goal-mini-pct">${pct}%</span>
             </div>
             <div class="progress-track mini">
-              <div class="progress-fill brand" style="width: ${pct}%"></div>
+              <div class="progress-fill ${pct >= 100 ? '' : 'brand'}" style="width: ${pct}%"></div>
             </div>
             <div class="tx-meta money-val" style="margin-top:5px">${formatIDR(g.saved)} / ${formatIDR(g.target)}</div>
           </div>
@@ -1238,7 +1318,7 @@ function renderDashboardDueBills() {
   wrap.classList.remove('hidden');
   listEl.innerHTML = urgentBills
     .map(({ bill, status }) => `
-      <div class="neu-card tool-row">
+      <div class="glass-card tool-row">
         <div>
           <div class="tx-cat">
             <span>${escapeHTML(bill.name)}</span>
@@ -1247,7 +1327,7 @@ function renderDashboardDueBills() {
           <div class="tx-meta money-val">${formatIDR(bill.amount)} • ${escapeHTML(bill.wallet)}</div>
         </div>
         <div class="action-row-sm">
-          <button type="button" class="neu-btn btn-pill-sm morph-btn" data-dash-pay-bill="${bill.id}">
+          <button type="button" class="glass-btn btn-pill-sm morph-btn" data-dash-pay-bill="${bill.id}">
             <span class="btn-label">Bayar</span>
           </button>
         </div>
@@ -1285,6 +1365,7 @@ function buildTxRowHTML(tx) {
       <div class="tx-right">
         <span class="tx-amount ${cls} money-val">${sign}${formatIDR(tx.amount)}</span>
         <div class="tx-actions">
+          <button type="button" class="mini-action-btn dup" data-dup-id="${tx.id}" title="Salin ke hari ini">Salin</button>
           <button type="button" class="mini-action-btn edit" data-edit-id="${tx.id}">Edit</button>
           <button type="button" class="mini-action-btn del" data-del-id="${tx.id}">Hapus</button>
         </div>
@@ -1294,6 +1375,9 @@ function buildTxRowHTML(tx) {
 }
 
 function bindTxRowActions(container) {
+  container.querySelectorAll('[data-dup-id]').forEach((btn) => {
+    btn.addEventListener('click', () => duplicateTransaction(btn.dataset.dupId));
+  });
   container.querySelectorAll('[data-edit-id]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tx = appState.transactions.find((t) => t.id === btn.dataset.editId);
@@ -1462,11 +1546,20 @@ function confirmGoalDeposit() {
     });
   }
 
-  triggerButtonMorph(document.getElementById('btn-confirm-deposit'), 'Tersimpan', () => {
-    closeModal('modal-goal-deposit');
-    showToast(`+${formatIDR(amount)} masuk ke ${goal.name}!`);
-    saveState(true);
-  });
+  const reachedTarget = goal.saved >= goal.target;
+  triggerButtonMorph(
+    document.getElementById('btn-confirm-deposit'),
+    reachedTarget ? 'Target Tercapai!' : 'Tersimpan',
+    () => {
+      closeModal('modal-goal-deposit');
+      showToast(
+        reachedTarget
+          ? `Selamat! Target "${goal.name}" 100% tercapai!`
+          : `+${formatIDR(amount)} masuk ke ${goal.name}!`
+      );
+      saveState(true);
+    }
+  );
 }
 
 function deleteGoal(goalId) {
@@ -1493,7 +1586,7 @@ function renderBudgetsAndGoalsView() {
   if (appState.budgets.length === 0) {
     document.getElementById('budget-total-summary').textContent = 'Rp 0 / Rp 0';
     document.getElementById('budget-total-pct').textContent = '0%';
-    listEl.innerHTML = `<div class="neu-card empty-state">Belum ada pos anggaran. Tekan <strong>+ Atur Pos</strong> untuk membatasi pengeluaran.</div>`;
+    listEl.innerHTML = `<div class="glass-card empty-state">Belum ada pos anggaran. Tekan <strong>+ Atur Pos</strong> untuk membatasi pengeluaran.</div>`;
   } else {
     listEl.innerHTML = appState.budgets
       .map((b, idx) => {
@@ -1512,7 +1605,7 @@ function renderBudgetsAndGoalsView() {
         const sisaLabel = sisa >= 0 ? `Sisa ${formatIDR(sisa)}` : `Overbudget ${formatIDR(Math.abs(sisa))}`;
 
         return `
-          <div class="neu-card reveal-card" style="--i: ${idx + 2}">
+          <div class="glass-card reveal-card" style="--i: ${idx + 2}">
             <div class="budget-item-top">
               <span class="budget-cat-name">${escapeHTML(b.category)}</span>
               <span class="budget-numbers money-val">${formatIDR(spent)} / ${formatIDR(limit)}</span>
@@ -1547,7 +1640,7 @@ function renderBudgetsAndGoalsView() {
   // Render Savings Goals List
   const goalsListEl = document.getElementById('goals-list');
   if (appState.goals.length === 0) {
-    goalsListEl.innerHTML = `<div class="neu-card empty-state">Belum ada celengan target. Tekan <strong>+ Target</strong> untuk membuat target tabungan.</div>`;
+    goalsListEl.innerHTML = `<div class="glass-card empty-state">Belum ada celengan target. Tekan <strong>+ Target</strong> untuk membuat target tabungan.</div>`;
   } else {
     goalsListEl.innerHTML = appState.goals
       .map((g) => {
@@ -1557,9 +1650,12 @@ function renderBudgetsAndGoalsView() {
         const deadlineText = g.deadline ? ` • Target ${g.deadline}` : '';
 
         return `
-          <div class="neu-card">
+          <div class="glass-card">
             <div class="budget-item-top">
-              <span class="budget-cat-name">${escapeHTML(g.name)}</span>
+              <span class="budget-cat-name">
+                <span>${escapeHTML(g.name)}</span>
+                ${pct >= 100 ? `<span class="badge-paid">✓ Tercapai</span>` : ''}
+              </span>
               <span class="budget-numbers money-val">${formatIDR(saved)} / ${formatIDR(target)}</span>
             </div>
             <div class="progress-track">
@@ -1568,7 +1664,7 @@ function renderBudgetsAndGoalsView() {
             <div class="budget-footer">
               <span>Terkumpul ${pct}%${deadlineText}</span>
               <div class="action-row-sm">
-                <button type="button" class="neu-btn btn-pill-sm morph-btn" data-deposit-goal="${g.id}">
+                <button type="button" class="glass-btn btn-pill-sm morph-btn" data-deposit-goal="${g.id}">
                   <span class="btn-label">+ Nabung</span>
                 </button>
                 <button type="button" class="mini-action-btn edit" data-edit-goal="${g.id}">Edit</button>
@@ -1702,7 +1798,7 @@ function renderReportView() {
 }
 
 function renderReportTxListOnly() {
-  const { m, y, txs } = getSelectedPeriodTxs();
+  const { m, y, range, txs } = getSelectedPeriodTxs();
   const filtered = txs.filter((t) => {
     if (reportFilterType !== 'all' && t.type !== reportFilterType) return false;
     if (reportSearchQuery) {
@@ -1715,7 +1811,10 @@ function renderReportTxListOnly() {
   const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
   const fullListEl = document.getElementById('rep-full-tx-list');
   if (sorted.length === 0) {
-    fullListEl.innerHTML = `<div class="empty-state">Tidak ada transaksi yang cocok di ${MONTH_NAMES[m]} ${y}.</div>`;
+    const periodDesc = reportPeriodMode === 'cycle'
+      ? `siklus ${range.startISO} s.d. ${range.endISO}`
+      : `${MONTH_NAMES[m]} ${y}`;
+    fullListEl.innerHTML = `<div class="empty-state">Tidak ada transaksi yang cocok di ${periodDesc}.</div>`;
   } else {
     fullListEl.innerHTML = sorted.map((t) => buildTxRowHTML(t)).join('');
     bindTxRowActions(fullListEl);
@@ -1731,16 +1830,16 @@ function renderReportChart(range, txs, catTotals) {
   }
 
   const isDark = appState.settings.theme === 'dark';
-  const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(163,177,198,0.35)';
-  const tickColor = isDark ? '#8C97AB' : '#5E6A7E';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.08)';
+  const tickColor = isDark ? '#94A3C4' : '#475569';
 
   if (reportChartMode === 'doughnut') {
     const entries = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
     const labels = entries.length ? entries.map((e) => e[0]) : ['Belum ada data'];
     const dataVals = entries.length ? entries.map((e) => e[1]) : [1];
     const palette = entries.length
-      ? ['#C84B31', '#3B5BFD', '#0E8A5D', '#D9822B', '#2574B8', '#8B5CF6', '#EC4899', '#64748B']
-      : [isDark ? '#2B303C' : '#CBD5E1'];
+      ? ['#FF2A85', '#00F5D4', '#8B5CF6', '#00BBF9', '#00F59B', '#FBBF24', '#F97316', '#EC4899']
+      : [isDark ? '#1E293B' : '#CBD5E1'];
 
     cashflowChartInstance = new Chart(canvas, {
       type: 'doughnut',
@@ -1757,7 +1856,7 @@ function renderReportChart(range, txs, catTotals) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '62%',
+        cutout: '64%',
         plugins: {
           legend: {
             display: entries.length > 0,
@@ -1774,23 +1873,25 @@ function renderReportChart(range, txs, catTotals) {
     return;
   }
 
-  // Bar Chart: Tren Arus Kas Harian sepanjang rentang periode
+  // O(N) Map-based Bar Chart: Tren Arus Kas Harian sepanjang rentang periode
   const startDate = new Date(range.startISO + 'T00:00:00');
   const endDate = new Date(range.endISO + 'T00:00:00');
-  const dateKeys = [];
+  const dateIndexMap = new Map();
   const labels = [];
 
   for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-    dateKeys.push(toISODate(d));
+    const iso = toISODate(d);
+    dateIndexMap.set(iso, labels.length);
     labels.push(String(d.getDate()));
   }
 
-  const dailyInc = new Array(dateKeys.length).fill(0);
-  const dailyExp = new Array(dateKeys.length).fill(0);
+  const dailyInc = new Array(labels.length).fill(0);
+  const dailyExp = new Array(labels.length).fill(0);
 
   txs.forEach((t) => {
-    const idx = dateKeys.indexOf(t.date);
-    if (idx !== -1) {
+    const cleanDate = (t.date || '').slice(0, 10);
+    const idx = dateIndexMap.get(cleanDate);
+    if (idx !== undefined) {
       if (t.type === 'income') dailyInc[idx] += Number(t.amount) || 0;
       else if (t.type === 'transfer') dailyExp[idx] += Number(t.fee) || 0;
       else dailyExp[idx] += Number(t.amount) || 0;
@@ -1805,14 +1906,14 @@ function renderReportChart(range, txs, catTotals) {
         {
           label: 'Pemasukan',
           data: dailyInc,
-          backgroundColor: isDark ? '#2ED199' : '#0E8A5D',
-          borderRadius: 4
+          backgroundColor: isDark ? '#00F59B' : '#059669',
+          borderRadius: 5
         },
         {
           label: 'Pengeluaran',
           data: dailyExp,
-          backgroundColor: isDark ? '#F26B50' : '#C84B31',
-          borderRadius: 4
+          backgroundColor: isDark ? '#FF2A85' : '#E11D48',
+          borderRadius: 5
         }
       ]
     },
@@ -2003,8 +2104,15 @@ function payRecurringBill(billId, btnEl = null) {
 
   const currentYM = getCurrentPeriodYM();
   if (bill.paidPeriod === currentYM) return;
+  if (btnEl && btnEl.dataset.paying === '1') return;
+  if (btnEl) btnEl.dataset.paying = '1';
+
+  const targetWallet = appState.wallets.includes(bill.wallet)
+    ? bill.wallet
+    : appState.wallets[0] || 'Tunai';
 
   const commitPayment = () => {
+    if (bill.paidPeriod === currentYM) return;
     const nowISO = new Date().toISOString();
     bill.paidPeriod = currentYM;
     bill.updatedAt = nowISO;
@@ -2015,7 +2123,7 @@ function payRecurringBill(billId, btnEl = null) {
       type: 'expense',
       amount: bill.amount,
       category: bill.category,
-      wallet: bill.wallet,
+      wallet: targetWallet,
       date: getTodayISO(),
       note: `Tagihan: ${bill.name}`,
       updatedAt: nowISO
@@ -2138,13 +2246,13 @@ function renderToolsView() {
   const billListEl = document.getElementById('tools-bill-list');
 
   if (appState.bills.length === 0) {
-    billListEl.innerHTML = `<div class="neu-card empty-state">Belum ada jadwal tagihan rutin.</div>`;
+    billListEl.innerHTML = `<div class="glass-card empty-state">Belum ada jadwal tagihan rutin.</div>`;
   } else {
     billListEl.innerHTML = appState.bills
       .map((b) => {
         const status = getBillDueStatus(b);
         return `
-          <div class="neu-card tool-row">
+          <div class="glass-card tool-row">
             <div style="min-width:0">
               <div class="tx-cat">
                 <span>${escapeHTML(b.name)}</span>
@@ -2156,7 +2264,7 @@ function renderToolsView() {
               ${
                 status.isPaid
                   ? `<span class="badge-paid">✓ Lunas</span>`
-                  : `<button type="button" class="neu-btn btn-pill-sm morph-btn" data-pay-bill="${b.id}"><span class="btn-label">Bayar</span></button>`
+                  : `<button type="button" class="glass-btn btn-pill-sm morph-btn" data-pay-bill="${b.id}"><span class="btn-label">Bayar</span></button>`
               }
               <button type="button" class="mini-action-btn edit" data-edit-bill="${b.id}" title="Edit Tagihan">✎</button>
               <button type="button" class="mini-action-btn del" data-del-bill="${b.id}" title="Hapus">✕</button>
@@ -2185,7 +2293,7 @@ function renderToolsView() {
   const activeWishes = appState.wishlist.filter((w) => !w.purchased);
 
   if (activeWishes.length === 0) {
-    wishListEl.innerHTML = `<div class="neu-card empty-state">Wishlist kosong. Catat barang incaran agar tidak lapar mata.</div>`;
+    wishListEl.innerHTML = `<div class="glass-card empty-state">Wishlist kosong. Catat barang incaran agar tidak lapar mata.</div>`;
   } else {
     const nowMs = Date.now();
     wishListEl.innerHTML = activeWishes
@@ -2203,15 +2311,15 @@ function renderToolsView() {
             : `Terkunci: ${hoursLeft} jam lagi`;
 
         return `
-          <div class="neu-card tool-row">
+          <div class="glass-card tool-row">
             <div>
               <div class="tx-cat">${escapeHTML(w.name)}</div>
               <div class="tx-meta money-val">${formatIDR(w.price)}${w.note ? ` • ${escapeHTML(w.note)}` : ''}</div>
               <span class="cooldown-tag">${statusLabel}</span>
             </div>
             <div class="action-row-sm">
-              <button type="button" class="neu-btn btn-pill-sm" ${isUnlocked ? '' : 'disabled'} data-buy-wish="${w.id}">
-                Beli
+              <button type="button" class="glass-btn btn-pill-sm morph-btn" ${isUnlocked ? '' : 'disabled'} data-buy-wish="${w.id}">
+                <span class="btn-label">Beli</span>
               </button>
               <button type="button" class="mini-action-btn del" data-del-wish="${w.id}">✕</button>
             </div>
@@ -2240,7 +2348,7 @@ function renderToolsView() {
             <span class="tx-meta">${txCount} transaksi tercatat</span>
           </div>
           <div class="action-row-sm">
-            <button type="button" class="neu-btn btn-pill-sm" data-rename-wallet="${escapeHTML(w)}">Rename</button>
+            <button type="button" class="glass-btn btn-pill-sm morph-btn" data-rename-wallet="${escapeHTML(w)}"><span class="btn-label">Rename</span></button>
             <button type="button" class="mini-action-btn del" data-del-wallet="${escapeHTML(w)}">Hapus</button>
           </div>
         </div>
@@ -2282,8 +2390,10 @@ async function pushSyncToCloud(silent = false) {
           bills: appState.bills,
           wishlist: appState.wishlist,
           goals: appState.goals,
+          templates: appState.templates,
           categories: appState.categories,
-          wallets: appState.wallets
+          wallets: appState.wallets,
+          cycleStartDay: appState.settings.cycleStartDay
         }
       })
     });
@@ -2305,6 +2415,21 @@ async function pushSyncToCloud(silent = false) {
   }
 }
 
+function applyCloudPayload(cloudData) {
+  appState.transactions = cloudData.transactions || [];
+  appState.budgets = cloudData.budgets || [];
+  appState.bills = cloudData.bills || [];
+  appState.wishlist = cloudData.wishlist || [];
+  appState.goals = cloudData.goals || [];
+  if (Array.isArray(cloudData.templates)) appState.templates = cloudData.templates;
+  if (cloudData.categories) appState.categories = cloudData.categories;
+  if (cloudData.wallets) appState.wallets = cloudData.wallets;
+  if (cloudData.cycleStartDay) {
+    appState.settings.cycleStartDay = Math.min(28, Math.max(1, Number(cloudData.cycleStartDay) || 1));
+    document.getElementById('input-cycle-day').value = String(appState.settings.cycleStartDay);
+  }
+}
+
 async function pullFromCloudForce() {
   const url = document.getElementById('input-gas-url').value.trim() || appState.settings.gasUrl;
   if (!url) {
@@ -2322,13 +2447,7 @@ async function pullFromCloudForce() {
     const getRes = await fetch(url);
     const getJson = await getRes.json();
     if (getJson.status === 'success' && getJson.data) {
-      appState.transactions = getJson.data.transactions || [];
-      appState.budgets = getJson.data.budgets || [];
-      appState.bills = getJson.data.bills || [];
-      appState.wishlist = getJson.data.wishlist || [];
-      appState.goals = getJson.data.goals || [];
-      if (getJson.data.categories) appState.categories = getJson.data.categories;
-      if (getJson.data.wallets) appState.wallets = getJson.data.wallets;
+      applyCloudPayload(getJson.data);
       appState.settings.lastSync = new Date().toISOString();
       saveState(false);
       triggerButtonMorph(document.getElementById('btn-pull-cloud'), 'Dipulihkan');
@@ -2359,13 +2478,7 @@ async function syncBidirectional() {
       const getRes = await fetch(url);
       const getJson = await getRes.json();
       if (getJson.status === 'success' && getJson.data) {
-        appState.transactions = getJson.data.transactions || [];
-        appState.budgets = getJson.data.budgets || [];
-        appState.bills = getJson.data.bills || [];
-        appState.wishlist = getJson.data.wishlist || [];
-        appState.goals = getJson.data.goals || [];
-        if (getJson.data.categories) appState.categories = getJson.data.categories;
-        if (getJson.data.wallets) appState.wallets = getJson.data.wallets;
+        applyCloudPayload(getJson.data);
         appState.settings.lastSync = new Date().toISOString();
         saveState(false);
         showToast('Data dipulihkan dari Google Sheets.');
@@ -2408,7 +2521,10 @@ function importBackupJSON(event) {
       if (Array.isArray(imported.templates)) appState.templates = imported.templates;
       if (imported.categories) appState.categories = imported.categories;
       if (imported.wallets) appState.wallets = imported.wallets;
-      if (imported.settings?.cycleStartDay) appState.settings.cycleStartDay = imported.settings.cycleStartDay;
+      if (imported.settings?.cycleStartDay) {
+        appState.settings.cycleStartDay = imported.settings.cycleStartDay;
+        document.getElementById('input-cycle-day').value = String(appState.settings.cycleStartDay);
+      }
       saveState(true);
       showToast('Data berhasil dipulihkan dari JSON.');
     } catch (err) {
@@ -2418,6 +2534,36 @@ function importBackupJSON(event) {
     }
   };
   reader.readAsText(file);
+}
+
+function resetLocalDeviceData() {
+  if (!confirm('Hapus seluruh catatan lokal di perangkat ini? Pastikan Anda sudah Ekspor JSON atau Kirim ke Cloud terlebih dahulu.')) {
+    return;
+  }
+  localStorage.removeItem(STORAGE_KEY);
+  appState = {
+    transactions: [],
+    budgets: [],
+    bills: [],
+    wishlist: [],
+    goals: [],
+    templates: [...DEFAULT_TEMPLATES],
+    categories: {
+      expense: [...DEFAULT_EXPENSE_CATEGORIES],
+      income: [...DEFAULT_INCOME_CATEGORIES]
+    },
+    wallets: [...DEFAULT_WALLETS],
+    settings: {
+      gasUrl: appState.settings.gasUrl,
+      theme: appState.settings.theme,
+      privacyMode: false,
+      lastSync: '',
+      cycleStartDay: 1
+    }
+  };
+  document.getElementById('input-cycle-day').value = '1';
+  saveState(false);
+  showToast('Data lokal perangkat berhasil direset.');
 }
 
 /* =========================================================
