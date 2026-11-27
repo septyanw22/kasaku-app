@@ -1,13 +1,11 @@
-const CACHE_NAME = 'kasaku-offline-v5-neonglass';
+const CACHE_NAME = 'kasaku-cache-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
   './manifest.json',
-  './icon-192.png',
-  './icon-512.png',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js'
+  './icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -31,18 +29,18 @@ self.addEventListener('fetch', (event) => {
   if (event.request.url.includes('script.google.com')) return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const copy = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        .then((networkRes) => {
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
-          return networkResponse;
+          return networkRes;
         })
-        .catch(() => cachedResponse || caches.match('./index.html'));
+        .catch(() => cached);
 
-      return cachedResponse || fetchPromise;
+      return cached || fetchPromise;
     })
   );
 });
