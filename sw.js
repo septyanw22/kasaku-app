@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kasaku-offline-v4';
+const CACHE_NAME = 'kasaku-offline-v5-neonglass';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -32,8 +32,7 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-      return fetch(event.request)
+      const fetchPromise = fetch(event.request)
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const copy = networkResponse.clone();
@@ -41,7 +40,9 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match('./index.html'));
+        .catch(() => cachedResponse || caches.match('./index.html'));
+
+      return cachedResponse || fetchPromise;
     })
   );
 });
