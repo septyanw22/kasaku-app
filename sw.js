@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kasaku-complete-v6';
+const CACHE_NAME = 'kasaku-complete-v7';
 const ASSETS = [
   './',
   './index.html',
@@ -11,7 +11,11 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  // cache:'reload' = ambil dari server, bukan dari cache HTTP browser. Tanpa ini app.js lama yang rusak
+  // bisa ikut tersalin ke cache baru dan terus dipakai.
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
+  );
 });
 
 self.addEventListener('activate', (event) => {
