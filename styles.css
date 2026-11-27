@@ -1,5 +1,5 @@
 /* =========================================================
-   KASAKU v5 — Dual Theme (Dark Cool Neon & Light Clean Glass)
+   KASAKU v6 — Dual Theme (Dark Cool Neon & Light Clean Glass)
    Interactive Dashboard Report + Automatic Calculator Numpad
    ========================================================= */
 
@@ -1031,4 +1031,12 @@ body {
   background: var(--bg-input);
   border-radius: 14px;
   border: 1px dashed var(--border-glass);
+}
+
+/* v6: canvas harus mengikuti ukuran pembungkusnya. Tanpa ini ukuran tampilnya = ukuran piksel
+   (lebar x devicePixelRatio), jadi grafik tampak 2-3x terlalu besar di HP. */
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
