@@ -899,7 +899,7 @@ body {
   max-width: 540px;
   z-index: 35;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   background: var(--bg-header);
   -webkit-backdrop-filter: blur(14px);
   backdrop-filter: blur(14px);
