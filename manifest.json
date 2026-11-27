@@ -1,20 +1,14 @@
 {
-  "id": "/kasaku-app/",
-  "name": "KASAKU — Glass Neon Personal Ledger",
+  "name": "KASAKU - Manajemen Keuangan",
   "short_name": "KASAKU",
-  "description": "Aplikasi pencatat keuangan harian, transfer dompet, target tabungan, dan anggaran amplop offline-first dengan desain Glassmorphism Neon.",
+  "description": "Aplikasi pencatatan keuangan pribadi, multi-dompet, dan tagihan rutin",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#06080F",
-  "theme_color": "#06080F",
-  "lang": "id-ID",
-  "categories": [
-    "finance",
-    "productivity"
-  ],
-  "prefer_related_applications": false,
+  "background_color": "#0b1120",
+  "theme_color": "#0b1120",
+  "categories": ["finance", "productivity"],
   "icons": [
     {
       "src": "./icon-192.png",
@@ -27,22 +21,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Catat Pengeluaran",
-      "short_name": "Keluar",
-      "description": "Langsung catat pengeluaran baru",
-      "url": "./index.html?action=expense",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Catat Pemasukan",
-      "short_name": "Masuk",
-      "description": "Langsung catat pemasukan baru",
-      "url": "./index.html?action=income",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
