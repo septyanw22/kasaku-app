@@ -1,5 +1,6 @@
 /**
  * KASAKU v7 — Interactive Financial Dashboard, Automatic Numpad & Dual Theme
+ * v8: batas manual dihapus, total anggaran = jumlah anggaran kategori
  * v7: menu Anggaran per kategori, target tabungan bisa diedit
  * v6: satu salinan kode (v4 dihapus), tanggal lokal (WIB), sanitasi data, konfirmasi hapus/reset/tarik cloud
  */
@@ -33,7 +34,6 @@
     theme: 'dark',
     privacyMode: false,
     reportPeriod: 'month',
-    monthlyBudget: 3000000,
     gasUrl: '',
     lastSync: null,
     wallets: [
@@ -147,7 +147,6 @@
       theme: raw.theme === 'light' ? 'light' : 'dark',
       privacyMode: !!raw.privacyMode,
       reportPeriod: ['today', '7d', 'month', 'all'].includes(raw.reportPeriod) ? raw.reportPeriod : 'month',
-      monthlyBudget: Math.max(50000, num(raw.monthlyBudget) || 3000000),
       gasUrl: str(raw.gasUrl, 500),
       lastSync: raw.lastSync ? str(raw.lastSync, 40) : null
     };
@@ -514,15 +513,16 @@
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const remainingDays = Math.max(1, daysInMonth - dayOfMonth + 1);
     const dailyAvg = Math.round(monthExp / dayOfMonth);
-    const budgetCap = Math.max(50000, Number(state.monthlyBudget || 3000000));
-    const remainingBudget = Math.max(0, budgetCap - monthExp);
-    const safeDaily = Math.round(remainingBudget / remainingDays);
+    const budget = getBudgetTotals();
+    const safeDaily = Math.round(Math.max(0, budget.total - budget.spent) / remainingDays);
 
     document.getElementById('dailyAvgDisplay').textContent = formatRupiah(dailyAvg);
-    document.getElementById('safeDailyDisplay').textContent = `Aman: ${formatRupiah(safeDaily)}/hari`;
-    document.getElementById('budgetUsageText').textContent = `${formatRupiah(monthExp)} / ${formatRupiah(budgetCap)}`;
+    document.getElementById('safeDailyDisplay').textContent =
+      budget.total > 0 ? `Aman: ${formatRupiah(safeDaily)}/hari` : 'Atur di menu Anggaran';
+    document.getElementById('budgetUsageText').textContent =
+      budget.total > 0 ? `${formatRupiah(budget.spent)} / ${formatRupiah(budget.total)}` : 'Belum ada anggaran';
 
-    const budgetPct = Math.min(100, Math.round((monthExp / budgetCap) * 100));
+    const budgetPct = budget.total > 0 ? Math.min(100, Math.round((budget.spent / budget.total) * 100)) : 0;
     const fillEl = document.getElementById('budgetProgressFill');
     fillEl.style.width = `${budgetPct}%`;
     fillEl.classList.toggle('warn', budgetPct >= 85);
@@ -811,21 +811,26 @@
     }
   }
 
-  function renderBudgetView() {
-    const summary = getCategoryExpenseSummary(filterTransactionsByPeriod('month'));
+  // Total anggaran = jumlah batas semua anggaran kategori. Terpakai = pengeluaran bulan ini
+  // hanya di kategori yang punya anggaran (belanja di luar anggaran tidak membuat bar penuh).
+  function getBudgetTotals() {
     const spentByCat = {};
-    summary.items.forEach((i) => {
+    getCategoryExpenseSummary(filterTransactionsByPeriod('month')).items.forEach((i) => {
       spentByCat[i.name] = i.amount;
     });
+    const total = state.budgets.reduce((sum, b) => sum + b.limit, 0);
+    const spent = state.budgets.reduce((sum, b) => sum + (spentByCat[b.category] || 0), 0);
+    return { total, spent, spentByCat };
+  }
 
-    const cap = Math.max(50000, Number(state.monthlyBudget || 3000000));
-    const totalPct = Math.round((summary.total / cap) * 100);
-    const allocated = state.budgets.reduce((sum, b) => sum + b.limit, 0);
-    document.getElementById('budgetTotalText').textContent = `${formatRupiah(summary.total)} / ${formatRupiah(cap)}`;
+  function renderBudgetView() {
+    const { total, spent, spentByCat } = getBudgetTotals();
+    const totalPct = total > 0 ? Math.round((spent / total) * 100) : 0;
+    document.getElementById('budgetTotalText').textContent = formatRupiah(total);
     document.getElementById('budgetTotalHint').textContent =
-      allocated > cap
-        ? `Anggaran kategori (${formatRupiah(allocated)}) melebihi batas total`
-        : `Teralokasi ke kategori: ${formatRupiah(allocated)}`;
+      total > 0
+        ? `Terpakai ${formatRupiah(spent)} • ${spent > total ? `Lebih ${formatRupiah(spent - total)}` : `Sisa ${formatRupiah(total - spent)}`}`
+        : 'Tambah anggaran kategori di bawah';
     const fill = document.getElementById('budgetTotalFill');
     fill.style.width = `${Math.min(100, totalPct)}%`;
     fill.classList.toggle('warn', totalPct >= 85);
@@ -1336,10 +1341,7 @@
         applyTheme(next);
         showToast(`Beralih ke ${next === 'light' ? 'Light Mode' : 'Dark Mode'}`);
       } else if (act === 'open-tx-modal') prepareTxModal('expense');
-      else if (act === 'open-budget-modal') {
-        document.getElementById('monthlyBudgetInput').value = state.monthlyBudget || 3000000;
-        openModal('budgetModal');
-      } else if (act === 'open-wallet-modal') prepareWalletModal(null);
+      else if (act === 'open-wallet-modal') prepareWalletModal(null);
       else if (act === 'open-bill-modal') prepareBillModal(null);
       else if (act === 'open-goal-modal') prepareGoalModal(null);
       else if (act === 'open-budget-cat-modal') prepareBudgetCatModal(null);
@@ -1610,12 +1612,6 @@
       renderAll();
       const warn = type === 'expense' ? budgetWarning(category) : '';
       showToast(`Transaksi ${formatRupiah(amount)} tersimpan${warn ? ' • ' + warn : ''}`);
-    } else if (formId === 'budgetForm') {
-      state.monthlyBudget = Math.max(50000, Number(document.getElementById('monthlyBudgetInput').value || 3000000));
-      saveState();
-      closeModal('budgetModal');
-      renderDashboard();
-      showToast('Batas anggaran bulanan diperbarui');
     } else if (formId === 'walletForm') {
       const id = document.getElementById('walletIdInput').value;
       const name = document.getElementById('walletNameInput').value.trim();
