@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#0b1120">
+  <meta name="theme-color" id="metaThemeColor" content="#0b1120">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,6 +25,22 @@
         </div>
       </div>
       <div class="top-actions">
+        <button type="button" class="icon-btn morph-btn" data-action="toggle-theme" id="themeToggleBtn" title="Ganti Tema (Dark / Light)" aria-label="Ganti Tema">
+          <svg id="themeIconSun" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+          <svg id="themeIconMoon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
         <button type="button" class="icon-btn morph-btn" data-action="sync-now" title="Sinkronisasi Cloud" aria-label="Sinkronisasi Cloud">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
@@ -45,23 +61,64 @@
     <!-- Main Scrollable Content -->
     <main class="content-area" id="mainContent">
 
-      <!-- VIEW 1: DASHBOARD -->
+      <!-- VIEW 1: INTERACTIVE REPORT DASHBOARD -->
       <section class="view-section active" id="view-dashboard">
         <!-- Hero Balance Card -->
         <div class="glass-card hero-card">
           <div class="hero-top">
             <span class="label-muted">Total Saldo Bersih</span>
-            <button type="button" class="pill-btn-sm" data-action="toggle-privacy" id="privacyBtn">Sembunyikan</button>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="net-badge" id="netCashflowBadge">+Rp 0</span>
+              <button type="button" class="pill-btn-sm" data-action="toggle-privacy" id="privacyBtn">Sembunyikan</button>
+            </div>
           </div>
           <div class="hero-balance" id="totalBalanceDisplay">Rp 0</div>
+
+          <!-- Interactive Period Filter -->
+          <div class="period-tabs" id="reportPeriodTabs">
+            <button type="button" class="period-btn" data-period="today">Hari Ini</button>
+            <button type="button" class="period-btn" data-period="7d">7 Hari</button>
+            <button type="button" class="period-btn active" data-period="month">Bulan Ini</button>
+            <button type="button" class="period-btn" data-period="all">Semua</button>
+          </div>
+
           <div class="hero-stats">
             <div class="stat-box income">
-              <span class="stat-label">Pemasukan Bulan Ini</span>
-              <strong class="stat-val" id="monthIncomeDisplay">Rp 0</strong>
+              <span class="stat-label" id="incomePeriodLabel">Pemasukan (Bulan Ini)</span>
+              <strong class="stat-val" id="periodIncomeDisplay">Rp 0</strong>
             </div>
             <div class="stat-box expense">
-              <span class="stat-label">Pengeluaran Bulan Ini</span>
-              <strong class="stat-val" id="monthExpenseDisplay">Rp 0</strong>
+              <span class="stat-label" id="expensePeriodLabel">Pengeluaran (Bulan Ini)</span>
+              <strong class="stat-val" id="periodExpenseDisplay">Rp 0</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Smart Financial Health & Budget Guard Card -->
+        <div class="glass-card insight-card">
+          <div class="section-header compact">
+            <h2>Analisis & Kesehatan Finansial</h2>
+            <button type="button" class="pill-btn-sm" data-action="open-budget-modal">Atur Limit</button>
+          </div>
+          <div class="insight-grid">
+            <div class="insight-metric">
+              <span class="stat-label">Rasio Tabungan</span>
+              <strong class="insight-val" id="savingsRateDisplay">0%</strong>
+              <span class="insight-sub" id="savingsStatusText">Belum ada pemasukan</span>
+            </div>
+            <div class="insight-metric">
+              <span class="stat-label">Rata-rata Keluar / Hari</span>
+              <strong class="insight-val" id="dailyAvgDisplay">Rp 0</strong>
+              <span class="insight-sub" id="safeDailyDisplay">Aman: Rp 0/hari</span>
+            </div>
+          </div>
+          <div class="budget-meter">
+            <div class="budget-meter-top">
+              <span class="label-muted">Pemakaian Anggaran Bulan Ini</span>
+              <strong class="budget-meter-val" id="budgetUsageText">Rp 0 / Rp 3.000.000</strong>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" id="budgetProgressFill" style="width: 0%;"></div>
             </div>
           </div>
         </div>
@@ -73,11 +130,25 @@
         </div>
         <div class="wallet-strip" id="dashboardWalletList"></div>
 
-        <!-- 7-Day Cashflow Chart -->
+        <!-- Interactive Category Breakdown (Donut + Clickable Legend) -->
         <div class="glass-card">
           <div class="section-header compact">
-            <h2>Arus Kas 7 Hari Terakhir</h2>
-            <span class="badge-info">Masuk vs Keluar</span>
+            <h2>Distribusi Pengeluaran</h2>
+            <span class="badge-info" id="donutPeriodBadge">Bulan Ini</span>
+          </div>
+          <div class="donut-layout">
+            <div class="donut-canvas-wrap">
+              <canvas id="categoryDonutCanvas"></canvas>
+            </div>
+            <div class="donut-legend" id="categoryBreakdownList"></div>
+          </div>
+        </div>
+
+        <!-- Interactive 7-Day Cashflow Bar Chart -->
+        <div class="glass-card">
+          <div class="section-header compact">
+            <h2>Tren Arus Kas 7 Hari</h2>
+            <span class="badge-info" id="chartSelectedDayInfo">Ketuk batang grafik</span>
           </div>
           <div class="chart-wrap">
             <canvas id="cashflowCanvas"></canvas>
@@ -152,6 +223,15 @@
       <!-- VIEW 5: SETTINGS & CLOUD SYNC -->
       <section class="view-section" id="view-settings">
         <div class="glass-card">
+          <h2 class="card-title">Tampilan & Tema Aplikasi</h2>
+          <p class="helper-text">Pilih mode gelap (Cool Neon) atau mode terang (Clean Daylight) sesuai kenyamanan mata.</p>
+          <div class="btn-grid-2">
+            <button type="button" class="btn-secondary morph-btn" data-set-theme="dark">Dark Mode</button>
+            <button type="button" class="btn-secondary morph-btn" data-set-theme="light">Light Mode</button>
+          </div>
+        </div>
+
+        <div class="glass-card">
           <h2 class="card-title">Sinkronisasi Google Apps Script</h2>
           <p class="helper-text">Tempel URL Web App deployment dari <code>Code.gs</code> untuk backup & sinkronisasi ke Google Sheets.</p>
           <div class="form-group">
@@ -173,11 +253,12 @@
         </div>
 
         <div class="glass-card">
-          <h2 class="card-title">Backup & Pemeliharaan Data</h2>
-          <div class="btn-grid-2">
-            <button type="button" class="btn-secondary morph-btn" data-action="export-json">Export JSON</button>
-            <button type="button" class="btn-danger morph-btn" data-action="reset-demo">Reset Data Demo</button>
+          <h2 class="card-title">Export Laporan & Backup Data</h2>
+          <div class="btn-grid-2" style="margin-bottom:10px;">
+            <button type="button" class="btn-primary morph-btn" data-action="export-csv">Export Laporan CSV</button>
+            <button type="button" class="btn-secondary morph-btn" data-action="export-json">Backup JSON</button>
           </div>
+          <button type="button" class="btn-danger full-width morph-btn" data-action="reset-demo">Reset Data Demo</button>
         </div>
       </section>
 
@@ -196,7 +277,7 @@
     <nav class="bottom-nav" aria-label="Navigasi Utama">
       <button type="button" class="nav-item active" data-nav="dashboard">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-        <span>Beranda</span>
+        <span>Laporan</span>
       </button>
       <button type="button" class="nav-item" data-nav="transactions">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -217,7 +298,7 @@
        MODALS (Hidden by default with display:none & pointer-events:none)
        ========================================================= -->
 
-  <!-- Modal: Quick-Entry Transaction -->
+  <!-- Modal: Quick-Entry Transaction with Automatic Calculator Numpad -->
   <div class="modal-backdrop" id="txModal" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
@@ -231,44 +312,93 @@
           <button type="button" class="seg-btn" data-tx-type="transfer">Transfer</button>
         </div>
         <input type="hidden" id="txTypeInput" value="expense">
+        <input type="hidden" id="txAmountInput" value="0">
 
-        <div class="form-group">
-          <label for="txAmountInput">Nominal (Rp)</label>
-          <input type="number" id="txAmountInput" class="input-field input-lg" placeholder="0" min="1" required inputmode="numeric">
+        <!-- Automatic Formatted Amount Readout -->
+        <div class="numpad-screen">
+          <div class="numpad-expr" id="numpadExprDisplay">Ketik nominal atau hitung otomatis</div>
+          <div class="numpad-main-row">
+            <span class="numpad-currency">Rp</span>
+            <span class="numpad-value" id="numpadValueDisplay">0</span>
+          </div>
           <div class="quick-amounts">
-            <button type="button" class="chip-btn" data-add-amount="10000">+10rb</button>
-            <button type="button" class="chip-btn" data-add-amount="25000">+25rb</button>
-            <button type="button" class="chip-btn" data-add-amount="50000">+50rb</button>
-            <button type="button" class="chip-btn" data-add-amount="100000">+100rb</button>
+            <button type="button" class="chip-btn" data-numpad-add="10000">+10rb</button>
+            <button type="button" class="chip-btn" data-numpad-add="25000">+25rb</button>
+            <button type="button" class="chip-btn" data-numpad-add="50000">+50rb</button>
+            <button type="button" class="chip-btn" data-numpad-add="100000">+100rb</button>
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="txWalletSelect" id="txWalletLabel">Dari Dompet</label>
-          <select id="txWalletSelect" class="input-field" required></select>
+        <!-- Custom Automatic Numpad Grid -->
+        <div class="numpad-grid" id="txNumpad">
+          <button type="button" class="num-key morph-btn" data-num-key="7">7</button>
+          <button type="button" class="num-key morph-btn" data-num-key="8">8</button>
+          <button type="button" class="num-key morph-btn" data-num-key="9">9</button>
+          <button type="button" class="num-key op morph-btn" data-num-key="BACK" aria-label="Hapus">⌫</button>
+
+          <button type="button" class="num-key morph-btn" data-num-key="4">4</button>
+          <button type="button" class="num-key morph-btn" data-num-key="5">5</button>
+          <button type="button" class="num-key morph-btn" data-num-key="6">6</button>
+          <button type="button" class="num-key op morph-btn" data-num-key="+">+</button>
+
+          <button type="button" class="num-key morph-btn" data-num-key="1">1</button>
+          <button type="button" class="num-key morph-btn" data-num-key="2">2</button>
+          <button type="button" class="num-key morph-btn" data-num-key="3">3</button>
+          <button type="button" class="num-key op morph-btn" data-num-key="-">−</button>
+
+          <button type="button" class="num-key danger morph-btn" data-num-key="C">C</button>
+          <button type="button" class="num-key morph-btn" data-num-key="0">0</button>
+          <button type="button" class="num-key morph-btn" data-num-key="000">000</button>
+          <button type="button" class="num-key eq morph-btn" data-num-key="=">=</button>
         </div>
 
-        <div class="form-group hidden" id="txToWalletGroup">
-          <label for="txToWalletSelect">Ke Dompet Tujuan</label>
-          <select id="txToWalletSelect" class="input-field"></select>
+        <!-- Compact Wallet & Category Row -->
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="txWalletSelect" id="txWalletLabel">Dompet</label>
+            <select id="txWalletSelect" class="input-field" required></select>
+          </div>
+
+          <div class="form-group" id="txCategoryGroup">
+            <label for="txCategorySelect">Kategori</label>
+            <select id="txCategorySelect" class="input-field"></select>
+          </div>
+
+          <div class="form-group hidden" id="txToWalletGroup">
+            <label for="txToWalletSelect">Ke Dompet</label>
+            <select id="txToWalletSelect" class="input-field"></select>
+          </div>
         </div>
 
-        <div class="form-group" id="txCategoryGroup">
-          <label for="txCategorySelect">Kategori</label>
-          <select id="txCategorySelect" class="input-field"></select>
-        </div>
-
-        <div class="form-group">
-          <label for="txDateInput">Tanggal</label>
-          <input type="date" id="txDateInput" class="input-field" required>
-        </div>
-
-        <div class="form-group">
-          <label for="txNoteInput">Catatan</label>
-          <input type="text" id="txNoteInput" class="input-field" placeholder="Contoh: Kopi V60, Makan Siang, Gaji...">
+        <div class="form-row-2">
+          <div class="form-group">
+            <label for="txDateInput">Tanggal</label>
+            <input type="date" id="txDateInput" class="input-field" required>
+          </div>
+          <div class="form-group">
+            <label for="txNoteInput">Catatan</label>
+            <input type="text" id="txNoteInput" class="input-field" placeholder="Kopi, Makan, Gaji...">
+          </div>
         </div>
 
         <button type="submit" class="btn-primary full-width morph-btn">Simpan Transaksi</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Set Monthly Budget Limit -->
+  <div class="modal-backdrop" id="budgetModal" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3>Atur Batas Anggaran Bulanan</h3>
+        <button type="button" class="close-btn" data-close-modal="budgetModal">&times;</button>
+      </div>
+      <form id="budgetForm">
+        <div class="form-group">
+          <label for="monthlyBudgetInput">Target Maksimal Pengeluaran / Bulan (Rp)</label>
+          <input type="number" id="monthlyBudgetInput" class="input-field input-lg" min="50000" step="50000" required inputmode="numeric">
+        </div>
+        <button type="submit" class="btn-primary full-width morph-btn">Simpan Batas Anggaran</button>
       </form>
     </div>
   </div>
