@@ -1,7 +1,9 @@
 {
+  "id": "./",
   "name": "KASAKU - Manajemen Keuangan",
   "short_name": "KASAKU",
   "description": "Aplikasi laporan keuangan interaktif, numpad otomatis, multi-dompet, dan tagihan rutin",
+  "lang": "id",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -10,17 +12,8 @@
   "theme_color": "#0b1120",
   "categories": ["finance", "productivity"],
   "icons": [
-    {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
