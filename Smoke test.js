@@ -94,4 +94,55 @@ t('tanggal lokal WIB tidak mundur sehari (00:30 WIB)', () => {
   assert.strictEqual(local, '2026-12-01');
   assert.strictEqual(d.toISOString().slice(0, 10), '2026-11-30'); // kode lama salah di sini
 });
+
+const submit = (e, id) => e.fire('submit', { preventDefault() {}, target: { id } });
+const setBudget = (e, id, cat, limit) => { e.el('budgetCatIdInput').value = id; e.el('budgetCatSelect').value = cat; e.el('budgetCatLimitInput').value = String(limit); submit(e, 'budgetCatForm'); };
+const setGoal = (e, id, name, target, saved) => { e.el('goalIdInput').value = id; e.el('goalNameInput').value = name; e.el('goalTargetInput').value = String(target); e.el('goalSavedInput').value = String(saved); submit(e, 'goalForm'); };
+
+// ---- Anggaran
+t('tambah anggaran kategori', () => { setBudget(env, '', 'Makan & Kopi', 100000); assert.strictEqual(stored(env).budgets.length, 1); });
+t('kategori ganda ditolak', () => { setBudget(env, '', 'Makan & Kopi', 5000); assert.strictEqual(stored(env).budgets.length, 1); });
+t('edit anggaran mengubah, bukan menambah', () => {
+  const id = stored(env).budgets[0].id;
+  setBudget(env, id, 'Makan & Kopi', 200000);
+  const b = stored(env).budgets;
+  assert.strictEqual(b.length, 1); assert.strictEqual(b[0].limit, 200000);
+});
+t('pengeluaran melewati anggaran memunculkan peringatan', () => {
+  click(env, '[data-num-key]', { numKey: 'C' });
+  ['3','0','0','0','0','0'].forEach((k) => click(env, '[data-num-key]', { numKey: k }));
+  env.el('txTypeInput').value = 'expense'; env.el('txWalletSelect').value = 'w-tunai'; env.el('txToWalletSelect').value = '';
+  env.el('txCategorySelect').value = 'Makan & Kopi';
+  const d = new Date(), p = (n) => String(n).padStart(2, '0');
+  env.el('txDateInput').value = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; env.el('txNoteInput').value = 'besar';
+  submit(env, 'txForm');
+  assert.ok(/terlewati/.test(env.el('toast').textContent), env.el('toast').textContent);
+});
+t('hapus anggaran', () => { click(env, '[data-delete-budget]', { deleteBudget: stored(env).budgets[0].id }); assert.strictEqual(stored(env).budgets.length, 0); });
+t('anggaran rusak dibersihkan', () => {
+  const e = makeEnv({ kasaku_state_v5: JSON.stringify({ budgets: [null, { id: '<x>', category: '', limit: 5 }, { id: 'b1', category: 'Makan', limit: 'abc' }] }) });
+  const b = stored(e).budgets;
+  assert.strictEqual(b.length, 1); assert.strictEqual(b[0].limit, 1); assert.strictEqual(b[0].id, 'b1');
+});
+
+// ---- Target tabungan: edit & hapus
+t('edit target tabungan mengubah, bukan menambah', () => {
+  const n = stored(env).goals.length;
+  setGoal(env, 'goal-1', 'Dana Baru', 20000000, 5000000);
+  const g = stored(env).goals;
+  assert.strictEqual(g.length, n); assert.strictEqual(g[0].name, 'Dana Baru'); assert.strictEqual(g[0].target, 20000000); assert.strictEqual(g[0].saved, 5000000);
+});
+t('target tabungan baru & input tidak valid', () => {
+  const n = stored(env).goals.length;
+  setGoal(env, '', 'Liburan', 0, 0);            // target 0 ditolak
+  assert.strictEqual(stored(env).goals.length, n);
+  setGoal(env, '', 'Liburan', 3000000, 0);
+  assert.strictEqual(stored(env).goals.length, n + 1);
+});
+t('hapus target tabungan', () => {
+  const n = stored(env).goals.length;
+  click(env, '[data-delete-goal]', { deleteGoal: 'goal-1' });
+  assert.strictEqual(stored(env).goals.length, n - 1);
+});
+
 console.log(ok + ' tes lulus');
