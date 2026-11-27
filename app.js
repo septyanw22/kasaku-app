@@ -1,5 +1,6 @@
 /**
- * KASAKU v6 — Interactive Financial Dashboard, Automatic Numpad & Dual Theme
+ * KASAKU v7 — Interactive Financial Dashboard, Automatic Numpad & Dual Theme
+ * v7: menu Anggaran per kategori, target tabungan bisa diedit
  * v6: satu salinan kode (v4 dihapus), tanggal lokal (WIB), sanitasi data, konfirmasi hapus/reset/tarik cloud
  */
 (function () {
@@ -110,6 +111,7 @@
     goals: [
       { id: 'goal-1', name: 'Dana Darurat Keluarga', target: 15000000, saved: 4500000 }
     ],
+    budgets: [],
     wishlist: [
       {
         id: 'wish-1',
@@ -192,6 +194,10 @@
       target: Math.max(1, num(g.target)),
       saved: Math.max(0, num(g.saved))
     }));
+
+    out.budgets = list('budgets')
+      .map((b) => ({ id: safeId(b.id, 'bud'), category: str(b.category, 60), limit: Math.max(1, num(b.limit)) }))
+      .filter((b) => b.category);
 
     out.wishlist = list('wishlist').map((x) => ({
       id: safeId(x.id, 'wish'),
@@ -449,6 +455,7 @@
     renderDashboard();
     renderTransactionsList();
     renderWalletsAndBills();
+    renderBudgetView();
     renderGoalsAndWishlist();
     renderSettings();
   }
@@ -804,6 +811,64 @@
     }
   }
 
+  function renderBudgetView() {
+    const summary = getCategoryExpenseSummary(filterTransactionsByPeriod('month'));
+    const spentByCat = {};
+    summary.items.forEach((i) => {
+      spentByCat[i.name] = i.amount;
+    });
+
+    const cap = Math.max(50000, Number(state.monthlyBudget || 3000000));
+    const totalPct = Math.round((summary.total / cap) * 100);
+    const allocated = state.budgets.reduce((sum, b) => sum + b.limit, 0);
+    document.getElementById('budgetTotalText').textContent = `${formatRupiah(summary.total)} / ${formatRupiah(cap)}`;
+    document.getElementById('budgetTotalHint').textContent =
+      allocated > cap
+        ? `Anggaran kategori (${formatRupiah(allocated)}) melebihi batas total`
+        : `Teralokasi ke kategori: ${formatRupiah(allocated)}`;
+    const fill = document.getElementById('budgetTotalFill');
+    fill.style.width = `${Math.min(100, totalPct)}%`;
+    fill.classList.toggle('warn', totalPct >= 85);
+
+    const listEl = document.getElementById('budgetList');
+    if (state.budgets.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">Belum ada anggaran kategori. Klik + Anggaran untuk menambah.</div>';
+      return;
+    }
+    listEl.innerHTML = state.budgets
+      .map((b) => ({ b, spent: spentByCat[b.category] || 0 }))
+      .map((x) => ({ ...x, pct: Math.round((x.spent / x.b.limit) * 100) }))
+      .sort((a, c) => c.pct - a.pct)
+      .map(({ b, spent, pct }) => {
+        const left = b.limit - spent;
+        return `
+          <div class="glass-card" style="margin-bottom:0;">
+            <div class="item-title">${escapeHtml(b.category)} (${pct}%)</div>
+            <div class="item-meta">${formatRupiah(spent)} / ${formatRupiah(b.limit)} • ${
+              left < 0 ? `Lebih ${formatRupiah(-left)}` : `Sisa ${formatRupiah(left)}`
+            }</div>
+            <div class="progress-track"><div class="progress-fill ${pct >= 85 ? 'warn' : ''}" style="width:${Math.min(100, pct)}%;"></div></div>
+            <div class="item-actions">
+              <button type="button" class="mini-action-btn edit" data-edit-budget="${b.id}">Edit</button>
+              <button type="button" class="mini-action-btn del" data-delete-budget="${b.id}">Hapus</button>
+            </div>
+          </div>`;
+      })
+      .join('');
+  }
+
+  // '' jika aman, selain itu teks peringatan untuk toast setelah mencatat pengeluaran.
+  function budgetWarning(category) {
+    const b = state.budgets.find((x) => x.category === category);
+    if (!b) return '';
+    const spent = filterTransactionsByPeriod('month').reduce(
+      (sum, tx) => sum + (tx.type === 'expense' && tx.category === category ? Number(tx.amount) : 0),
+      0
+    );
+    if (spent > b.limit) return `Anggaran ${category} terlewati`;
+    return spent >= b.limit * 0.85 ? `Anggaran ${category} hampir habis` : '';
+  }
+
   function renderGoalsAndWishlist() {
     const goalsEl = document.getElementById('goalsList');
     if (state.goals.length === 0) {
@@ -819,6 +884,7 @@
               <div class="progress-track"><div class="progress-fill" style="width:${pct}%;"></div></div>
               <div class="item-actions">
                 <button type="button" class="mini-action-btn pay" data-topup-goal="${g.id}">+ Tambah Saldo</button>
+                <button type="button" class="mini-action-btn edit" data-edit-goal="${g.id}">Edit</button>
                 <button type="button" class="mini-action-btn del" data-delete-goal="${g.id}">Hapus</button>
               </div>
             </div>`;
@@ -997,6 +1063,42 @@
         .map((c) => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`)
         .join('');
     }
+  }
+
+  function prepareGoalModal(goalId = null) {
+    document.getElementById('goalForm').reset();
+    const g = goalId ? state.goals.find((item) => item.id === goalId) : null;
+    if (goalId && !g) return;
+    document.getElementById('goalModalTitle').textContent = g ? 'Edit Target Tabungan' : 'Target Tabungan Baru';
+    document.getElementById('goalIdInput').value = g ? g.id : '';
+    if (g) {
+      document.getElementById('goalNameInput').value = g.name;
+      document.getElementById('goalTargetInput').value = g.target;
+      document.getElementById('goalSavedInput').value = g.saved;
+    }
+    openModal('goalModal');
+  }
+
+  function prepareBudgetCatModal(budgetId = null) {
+    document.getElementById('budgetCatForm').reset();
+    const b = budgetId ? state.budgets.find((item) => item.id === budgetId) : null;
+    if (budgetId && !b) return;
+    const names = state.categories.filter((c) => c.type === 'expense').map((c) => c.name);
+    if (b && !names.includes(b.category)) names.push(b.category); // kategori sudah dihapus tapi anggaran masih ada
+    if (names.length === 0) {
+      showToast('Tambah kategori pengeluaran dulu di Pengaturan');
+      return;
+    }
+    document.getElementById('budgetCatSelect').innerHTML = names
+      .map((n) => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`)
+      .join('');
+    document.getElementById('budgetCatModalTitle').textContent = b ? 'Edit Anggaran Kategori' : 'Tambah Anggaran Kategori';
+    document.getElementById('budgetCatIdInput').value = b ? b.id : '';
+    if (b) {
+      document.getElementById('budgetCatSelect').value = b.category;
+      document.getElementById('budgetCatLimitInput').value = b.limit;
+    }
+    openModal('budgetCatModal');
   }
 
   function prepareWalletModal(walletId = null) {
@@ -1239,10 +1341,9 @@
         openModal('budgetModal');
       } else if (act === 'open-wallet-modal') prepareWalletModal(null);
       else if (act === 'open-bill-modal') prepareBillModal(null);
-      else if (act === 'open-goal-modal') {
-        document.getElementById('goalForm').reset();
-        openModal('goalModal');
-      } else if (act === 'open-wishlist-modal') {
+      else if (act === 'open-goal-modal') prepareGoalModal(null);
+      else if (act === 'open-budget-cat-modal') prepareBudgetCatModal(null);
+      else if (act === 'open-wishlist-modal') {
         document.getElementById('wishlistForm').reset();
         openModal('wishlistModal');
       } else if (act === 'open-category-modal') {
@@ -1385,6 +1486,28 @@
       return;
     }
 
+    const editGoal = target.closest('[data-edit-goal]');
+    if (editGoal) {
+      prepareGoalModal(editGoal.dataset.editGoal);
+      return;
+    }
+
+    const editBudget = target.closest('[data-edit-budget]');
+    if (editBudget) {
+      prepareBudgetCatModal(editBudget.dataset.editBudget);
+      return;
+    }
+
+    const delBudget = target.closest('[data-delete-budget]');
+    if (delBudget) {
+      if (!ask('Hapus anggaran kategori ini?')) return;
+      state.budgets = state.budgets.filter((b) => b.id !== delBudget.dataset.deleteBudget);
+      saveState();
+      renderAll();
+      showToast('Anggaran dihapus');
+      return;
+    }
+
     const delGoal = target.closest('[data-delete-goal]');
     if (delGoal) {
       if (!ask('Hapus target tabungan ini?')) return;
@@ -1485,7 +1608,8 @@
       saveState();
       closeModal('txModal');
       renderAll();
-      showToast(`Transaksi ${formatRupiah(amount)} tersimpan`);
+      const warn = type === 'expense' ? budgetWarning(category) : '';
+      showToast(`Transaksi ${formatRupiah(amount)} tersimpan${warn ? ' • ' + warn : ''}`);
     } else if (formId === 'budgetForm') {
       state.monthlyBudget = Math.max(50000, Number(document.getElementById('monthlyBudgetInput').value || 3000000));
       saveState();
@@ -1545,14 +1669,49 @@
       renderAll();
       showToast('Tagihan rutin disimpan');
     } else if (formId === 'goalForm') {
+      const id = document.getElementById('goalIdInput').value;
       const name = document.getElementById('goalNameInput').value.trim();
       const target = Number(document.getElementById('goalTargetInput').value);
-      const saved = Number(document.getElementById('goalSavedInput').value || 0);
-      state.goals.push({ id: uid('goal'), name, target, saved });
+      const saved = Math.max(0, Number(document.getElementById('goalSavedInput').value || 0));
+      if (!name || !(target > 0)) {
+        showToast('Isi nama dan target nominal lebih dari 0');
+        return;
+      }
+      const g = id ? state.goals.find((item) => item.id === id) : null;
+      if (g) {
+        g.name = name;
+        g.target = target;
+        g.saved = saved;
+      } else {
+        state.goals.push({ id: uid('goal'), name, target, saved });
+      }
       saveState();
       closeModal('goalModal');
       renderAll();
-      showToast('Target tabungan ditambahkan');
+      showToast(g ? 'Target tabungan diperbarui' : 'Target tabungan ditambahkan');
+    } else if (formId === 'budgetCatForm') {
+      const id = document.getElementById('budgetCatIdInput').value;
+      const category = document.getElementById('budgetCatSelect').value;
+      const limit = Number(document.getElementById('budgetCatLimitInput').value);
+      if (!category || !(limit > 0)) {
+        showToast('Pilih kategori dan isi batas lebih dari 0');
+        return;
+      }
+      if (state.budgets.some((b) => b.category === category && b.id !== id)) {
+        showToast('Kategori ini sudah punya anggaran, edit yang lama');
+        return;
+      }
+      const b = id ? state.budgets.find((item) => item.id === id) : null;
+      if (b) {
+        b.category = category;
+        b.limit = limit;
+      } else {
+        state.budgets.push({ id: uid('bud'), category, limit });
+      }
+      saveState();
+      closeModal('budgetCatModal');
+      renderAll();
+      showToast(b ? 'Anggaran diperbarui' : 'Anggaran ditambahkan');
     } else if (formId === 'wishlistForm') {
       const name = document.getElementById('wishNameInput').value.trim();
       const price = Number(document.getElementById('wishPriceInput').value);
