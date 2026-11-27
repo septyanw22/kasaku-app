@@ -115,7 +115,7 @@
           <div class="budget-meter">
             <div class="budget-meter-top">
               <span class="label-muted">Pemakaian Anggaran Bulan Ini</span>
-              <strong class="budget-meter-val" id="budgetUsageText">Rp 0 / Rp 3.000.000</strong>
+              <strong class="budget-meter-val" id="budgetUsageText">Belum ada anggaran</strong>
             </div>
             <div class="progress-track">
               <div class="progress-fill" id="budgetProgressFill" style="width: 0%;"></div>
@@ -207,17 +207,14 @@
       <!-- VIEW: ANGGARAN -->
       <section class="view-section" id="view-budget">
         <div class="glass-card">
-          <div class="section-header compact">
-            <h2>Batas Pengeluaran Bulan Ini</h2>
-            <button type="button" class="btn-primary-sm morph-btn" data-action="open-budget-modal">Ubah</button>
-          </div>
           <div class="budget-meter-top">
-            <span class="label-muted" id="budgetTotalHint">Teralokasi ke kategori: Rp 0</span>
-            <strong class="budget-meter-val" id="budgetTotalText">Rp 0 / Rp 0</strong>
+            <span class="label-muted">Total Anggaran per Bulan</span>
+            <strong class="budget-meter-val" id="budgetTotalText">Rp 0</strong>
           </div>
           <div class="progress-track">
             <div class="progress-fill" id="budgetTotalFill" style="width: 0%;"></div>
           </div>
+          <span class="label-muted" id="budgetTotalHint">Tambah anggaran kategori di bawah</span>
         </div>
 
         <div class="section-header" style="margin-top: 20px;">
@@ -410,23 +407,6 @@
         </div>
 
         <button type="submit" class="btn-primary full-width morph-btn">Simpan Transaksi</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- Modal: Set Monthly Budget Limit -->
-  <div class="modal-backdrop" id="budgetModal" role="dialog" aria-modal="true">
-    <div class="modal-sheet">
-      <div class="modal-header">
-        <h3>Atur Batas Anggaran Bulanan</h3>
-        <button type="button" class="close-btn" data-close-modal="budgetModal">&times;</button>
-      </div>
-      <form id="budgetForm">
-        <div class="form-group">
-          <label for="monthlyBudgetInput">Target Maksimal Pengeluaran / Bulan (Rp)</label>
-          <input type="number" id="monthlyBudgetInput" class="input-field input-lg" min="50000" step="1000" required inputmode="numeric">
-        </div>
-        <button type="submit" class="btn-primary full-width morph-btn">Simpan Batas Anggaran</button>
       </form>
     </div>
   </div>
