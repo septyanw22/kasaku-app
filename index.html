@@ -98,7 +98,7 @@
         <div class="glass-card insight-card">
           <div class="section-header compact">
             <h2>Analisis & Kesehatan Finansial</h2>
-            <button type="button" class="pill-btn-sm" data-action="open-budget-modal">Atur Limit</button>
+            <button type="button" class="pill-btn-sm" data-nav="budget">Anggaran</button>
           </div>
           <div class="insight-grid">
             <div class="insight-metric">
@@ -204,6 +204,30 @@
         <div id="fullBillsList" class="stack-list"></div>
       </section>
 
+      <!-- VIEW: ANGGARAN -->
+      <section class="view-section" id="view-budget">
+        <div class="glass-card">
+          <div class="section-header compact">
+            <h2>Batas Pengeluaran Bulan Ini</h2>
+            <button type="button" class="btn-primary-sm morph-btn" data-action="open-budget-modal">Ubah</button>
+          </div>
+          <div class="budget-meter-top">
+            <span class="label-muted" id="budgetTotalHint">Teralokasi ke kategori: Rp 0</span>
+            <strong class="budget-meter-val" id="budgetTotalText">Rp 0 / Rp 0</strong>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="budgetTotalFill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <div class="section-header" style="margin-top: 20px;">
+          <h2>Anggaran per Kategori</h2>
+          <button type="button" class="btn-primary-sm morph-btn" data-action="open-budget-cat-modal">+ Anggaran</button>
+        </div>
+        <p class="helper-text">Batas bulanan untuk kategori tertentu. Dihitung dari pengeluaran bulan berjalan.</p>
+        <div id="budgetList" class="stack-list"></div>
+      </section>
+
       <!-- VIEW 4: GOALS & WISHLIST COOLDOWN -->
       <section class="view-section" id="view-goals">
         <div class="section-header">
@@ -286,6 +310,10 @@
       <button type="button" class="nav-item" data-nav="wallets">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
         <span>Dompet</span>
+      </button>
+      <button type="button" class="nav-item" data-nav="budget">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+        <span>Anggaran</span>
       </button>
       <button type="button" class="nav-item" data-nav="goals">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
@@ -403,6 +431,28 @@
     </div>
   </div>
 
+  <!-- Modal: Add / Edit Category Budget -->
+  <div class="modal-backdrop" id="budgetCatModal" role="dialog" aria-modal="true">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h3 id="budgetCatModalTitle">Tambah Anggaran Kategori</h3>
+        <button type="button" class="close-btn" data-close-modal="budgetCatModal">&times;</button>
+      </div>
+      <form id="budgetCatForm">
+        <input type="hidden" id="budgetCatIdInput">
+        <div class="form-group">
+          <label for="budgetCatSelect">Kategori</label>
+          <select id="budgetCatSelect" class="input-field" required></select>
+        </div>
+        <div class="form-group">
+          <label for="budgetCatLimitInput">Batas per Bulan (Rp)</label>
+          <input type="number" id="budgetCatLimitInput" class="input-field input-lg" min="1000" step="1000" required inputmode="numeric">
+        </div>
+        <button type="submit" class="btn-primary full-width morph-btn">Simpan Anggaran</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal: Add / Edit Wallet -->
   <div class="modal-backdrop" id="walletModal" role="dialog" aria-modal="true">
     <div class="modal-sheet">
@@ -471,10 +521,11 @@
   <div class="modal-backdrop" id="goalModal" role="dialog" aria-modal="true">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h3>Target Tabungan Baru</h3>
+        <h3 id="goalModalTitle">Target Tabungan Baru</h3>
         <button type="button" class="close-btn" data-close-modal="goalModal">&times;</button>
       </div>
       <form id="goalForm">
+        <input type="hidden" id="goalIdInput">
         <div class="form-group">
           <label for="goalNameInput">Nama Target</label>
           <input type="text" id="goalNameInput" class="input-field" placeholder="Contoh: Dana Darurat, Liburan Keluarga" required>
