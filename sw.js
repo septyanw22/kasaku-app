@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kasaku-complete-v4';
+const CACHE_NAME = 'kasaku-complete-v5';
 const ASSETS = [
   './',
   './index.html',
